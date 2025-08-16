@@ -1,0 +1,17 @@
+[project]
+name = "voice-agent"
+version = "0.1.0"
+description = "This is a voice agent project."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.116.1",
+    "livekit[voice-agent-pipeline,voiceagentpipeline]>=1.0.12",
+    "livekit-agents[groq,sarvam,silero,turn-detector]>=1.2.5",
+    "livekit-plugins-noise-cancellation>=0.2.5",
+    "mcp>=1.13.0",
+    "sarvamai>=0.1.18",
+    "uvicorn>=0.35.0",
+    "livekit-plugins-turn-detector>=1.2.5",
+]
