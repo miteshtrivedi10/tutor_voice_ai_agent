@@ -1,0 +1,52 @@
+.App {
+  min-height: 100vh;
+  background-color: #f9fafb;
+}
+
+.dark .App {
+  background-color: #111827;
+}
+
+/* Custom animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.dark::-webkit-scrollbar-track {
+  background: #2d3748;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 4px;
+}
+
+.dark::-webkit-scrollbar-thumb {
+  background: #4c5a7a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a5b4fc;
+}
+
+.dark::-webkit-scrollbar-thumb:hover {
+  background: #637299;
+}
