@@ -1,6 +1,7 @@
 import React from 'react';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { useAudioVisualizer } from '../hooks/useAnimation';
+import API_CONFIG from '../config/api';
 
 interface VoiceControlProps {
   onConnect: (url: string, token: string) => void;
@@ -13,7 +14,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onConnect }) => {
   const handleConnect = () => {
     // In a real app, you would get these from your backend
     // For now, we'll use dummy values
-    const url = 'ws://localhost:7880';
+    const url = API_CONFIG.WS_URL;
     const token = 'dummy-token';
     onConnect(url, token);
     connectToRoom(url, token);

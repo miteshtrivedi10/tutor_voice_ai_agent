@@ -5,6 +5,7 @@ import { useVoiceStats } from '../hooks/useVoiceStats';
 import ParticipantList from './ParticipantList';
 import VoiceStats from './VoiceStats';
 import Spinner from './Spinner';
+import API_CONFIG from '../config/api';
 
 interface VoiceChatProps {
   onConnect: (url: string, token: string) => void;
@@ -30,7 +31,7 @@ const VoiceChat: React.FC<VoiceChatProps> = ({ onConnect }) => {
     setIsLoading(true);
     try {
       // Connect to backend to get room details
-      const response = await fetch('http://localhost:8000/voice', { 
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.VOICE}`, { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
