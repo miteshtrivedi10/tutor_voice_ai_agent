@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Room, RoomEvent, Participant, Track, RemoteTrack } from 'livekit-client';
 
 export const useVoiceChat = () => {
@@ -15,7 +15,13 @@ export const useVoiceChat = () => {
       
       // Set up event listeners
       newRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        setParticipants(prev => [...prev, participant]);
+        setParticipants(prev => {
+          // Check if participant already exists to avoid duplicates
+          if (prev.some(p => p.sid === participant.sid)) {
+            return prev;
+          }
+          return [...prev, participant];
+        });
       });
       
       newRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
@@ -36,6 +42,18 @@ export const useVoiceChat = () => {
         }
       });
       
+      // Listen for speaking events
+      newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        // Update participants with speaking status
+        setParticipants(prev => {
+          return prev.map(participant => {
+            const isSpeaking = speakers.some(speaker => speaker.sid === participant.sid);
+            // Update speaking status for this participant
+            return Object.assign(participant, { isSpeaking });
+          });
+        });
+      });
+      
       // Connect to the room
       await newRoom.connect(url, token);
       
@@ -44,7 +62,10 @@ export const useVoiceChat = () => {
       
       setRoom(newRoom);
       setIsConnected(true);
-      setParticipants(Array.from(newRoom.remoteParticipants.values()));
+      
+      // Add local participant to the participants list
+      const allParticipants = [newRoom.localParticipant, ...Array.from(newRoom.remoteParticipants.values())];
+      setParticipants(allParticipants);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to connect to room');
       setIsConnected(false);
@@ -75,6 +96,15 @@ export const useVoiceChat = () => {
       await room.localParticipant.setMicrophoneEnabled(!isEnabled);
       setIsMuted(!isEnabled);
     }
+  }, [room]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (room) {
+        room.disconnect();
+      }
+    };
   }, [room]);
 
   return {

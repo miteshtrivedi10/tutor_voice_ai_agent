@@ -50,7 +50,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onConnect }) => {
       {!isConnected ? (
         <button
           onClick={handleConnect}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+          className="btn-primary"
         >
           <div className="flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -69,10 +69,10 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onConnect }) => {
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <button
               onClick={toggleMute}
-              className={`px-6 py-3 font-medium rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-opacity-50 flex items-center ${
+              className={`font-medium shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-opacity-50 flex items-center ${
                 isMuted
-                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white focus:ring-yellow-500'
-                  : 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500'
+                  ? 'btn-warning'
+                  : 'btn-danger'
               }`}
             >
               {isMuted ? (
@@ -94,7 +94,7 @@ const VoiceControl: React.FC<VoiceControlProps> = ({ onConnect }) => {
 
             <button
               onClick={disconnectFromRoom}
-              className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 flex items-center"
+              className="btn-dark flex items-center"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
