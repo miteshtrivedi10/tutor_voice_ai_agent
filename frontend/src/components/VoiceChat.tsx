@@ -7,6 +7,7 @@ import VoiceStats from './VoiceStats';
 import Spinner from './Spinner';
 import API_CONFIG from '../config/api';
 import { Alert } from 'flowbite-react';
+import { ShimmerButton } from './ui/shimmer-button';
 
 interface VoiceChatProps {
   onConnect: (url: string, token: string) => void;
@@ -137,9 +138,11 @@ const VoiceChat: React.FC<VoiceChatProps> = ({ onConnect, onDisconnect }) => {
           </div>
 
           <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4">
-            <button
+            <ShimmerButton
               onClick={toggleMute}
-              className={`w-full md:w-auto btn-lg ${isMuted ? "btn-warning" : "btn-primary"}`}
+              className={`w-full md:w-auto px-8 py-4 text-base rounded-2xl shadow-lg ${isMuted ? "" : "mr-2"}`}
+              shimmerColor={isMuted ? "#000000" : "#ffffff"}
+              background={isMuted ? "rgba(251, 191, 36, 1)" : "rgba(56, 189, 248, 1)"}
             >
               {isMuted ? (
                 <>
@@ -156,17 +159,19 @@ const VoiceChat: React.FC<VoiceChatProps> = ({ onConnect, onDisconnect }) => {
                   Mute Microphone
                 </>
               )}
-            </button>
+            </ShimmerButton>
 
-            <button
+            <ShimmerButton
               onClick={handleDisconnect}
-              className="btn-danger w-full md:w-auto btn-lg"
+              className="w-full md:w-auto px-8 py-4 text-base rounded-2xl shadow-lg ml-2"
+              shimmerColor="#ffffff"
+              background="rgba(239, 68, 68, 1)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 011 1v1a1 1 0 01-1 1H4a1 1 0 01-1-1V5zm0 4a1 1 0 011-1h12a1 1 0 011 1v1a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm0 4a1 1 0 011-1h12a1 1 0 011 1v1a1 1 0 01-1 1H4a1 1 0 01-1-1v-1z" clipRule="evenodd" />
               </svg>
-              End Session
-            </button>
+              Disconnect
+            </ShimmerButton>
           </div>
         </div>
       )}

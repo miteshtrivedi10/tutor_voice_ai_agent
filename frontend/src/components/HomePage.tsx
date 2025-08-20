@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEntranceAnimation } from '../hooks/useAnimation';
 import { Card } from 'flowbite-react';
+import { ShimmerButton } from './ui/shimmer-button';
+import { PulsatingButton } from './ui/pulsating-button';
 
 const AnimatedMessage: React.FC<{ 
   text: string; 
@@ -98,11 +100,13 @@ const HomePage: React.FC = () => {
                 Practice speaking, get real-time feedback, and improve your skills faster.
               </p>
               <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-                <button 
-                  onClick={login} 
-                  className="btn-primary px-6 py-3 w-full sm:w-auto text-base rounded-xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-primary-500/30 flex items-center justify-center"
+                <PulsatingButton
+                  onClick={login}
+                  className="px-5 py-2.5 w-full sm:w-auto text-sm rounded-lg font-medium"
+                  pulseColor="#3b82f6"
+                  duration="2s"
                 >
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                     <path
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                       fill="#fff"
@@ -121,15 +125,18 @@ const HomePage: React.FC = () => {
                     />
                   </svg>
                   Start Learning
-                </button>
-                <button 
-                  className="btn-light px-6 py-3 w-full sm:w-auto text-base rounded-xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-gray-500/30 dark:focus:ring-gray-500/30 flex items-center justify-center"
+                </PulsatingButton>
+                <ShimmerButton
+                  className="px-5 py-2.5 w-full sm:w-auto text-sm rounded-lg shadow-md font-medium"
+                  shimmerColor="rgba(0, 0, 0, 0.2)"
+                  background="linear-gradient(135deg, #f3f4f6, #e5e7eb)" // light gray gradient
+                  shimmerDuration="4s"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
                   </svg>
                   How It Works
-                </button>
+                </ShimmerButton>
               </div>
             </div>
             <div className="relative">
@@ -352,9 +359,12 @@ const HomePage: React.FC = () => {
             </h2>
           </div>
           <div className="mt-8 lg:mt-0 flex justify-center lg:justify-end">
-            <button 
-              onClick={login} 
-              className="btn-primary px-8 py-4 text-base rounded-2xl shadow-lg transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-primary-500/30 flex items-center justify-center group"
+            <ShimmerButton
+              onClick={login}
+              className="px-8 py-4 text-base rounded-2xl shadow-lg font-bold text-lg"
+              shimmerColor="rgba(255, 255, 255, 0.9)"
+              background="linear-gradient(45deg, #3b82f6, #60a5fa)" // blue gradient
+              shimmerDuration="1.5s"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 48">
                 <path
@@ -374,10 +384,8 @@ const HomePage: React.FC = () => {
                   fill="#EA4335"
                 />
               </svg>
-              <span className="group-hover:text-white transition-colors duration-300">
-                Get Started
-              </span>
-            </button>
+              Get Started
+            </ShimmerButton>
           </div>
         </div>
       </section>

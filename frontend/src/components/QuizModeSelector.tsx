@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import VoiceChat from './VoiceChat';
 import useFileUpload from '../hooks/useFileUpload';
 import { Card, Alert, Table, TableHead, TableHeadCell, TableBody, TableRow, TableCell, Spinner as FlowbiteSpinner } from 'flowbite-react';
+import { ShimmerButton } from './ui/shimmer-button';
 
 const QuizModeSelector: React.FC = () => {
   // const { user } = useAuth(); // Removed unused variable
@@ -90,15 +91,17 @@ const QuizModeSelector: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <button
+          <ShimmerButton
             onClick={() => setSelectedMode(null)}
-            className="btn-light flex items-center"
+            className="px-6 py-3 text-base rounded-xl shadow-lg"
+            shimmerColor="#000000"
+            background="rgba(243, 244, 246, 1)" // gray-100
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
             </svg>
             Back to Mode Selection
-          </button>
+          </ShimmerButton>
         </div>
 
         <Card className="mb-8">
@@ -369,9 +372,13 @@ const QuizModeSelector: React.FC = () => {
               </li>
             </ul>
           </div>
-          <button className="btn-primary w-full">
+          <ShimmerButton 
+            className="w-full px-6 py-3 text-base rounded-xl shadow-lg"
+            shimmerColor="#ffffff"
+            background="rgba(56, 189, 248, 1)" // primary-500
+          >
             Select Mode
-          </button>
+          </ShimmerButton>
         </Card>
 
         {/* Quick Quiz Mode */}
@@ -412,9 +419,13 @@ const QuizModeSelector: React.FC = () => {
               </li>
             </ul>
           </div>
-          <button className="btn-success w-full">
+          <ShimmerButton 
+            className="w-full px-6 py-3 text-base rounded-xl shadow-lg"
+            shimmerColor="#ffffff"
+            background="rgba(34, 197, 94, 1)" // success-500
+          >
             Select Mode
-          </button>
+          </ShimmerButton>
         </Card>
 
         {/* Multiple Choice Quiz */}
@@ -455,9 +466,13 @@ const QuizModeSelector: React.FC = () => {
               </li>
             </ul>
           </div>
-          <button className="btn-secondary w-full">
+          <ShimmerButton 
+            className="w-full px-6 py-3 text-base rounded-xl shadow-lg"
+            shimmerColor="#ffffff"
+            background="rgba(139, 92, 246, 1)" // secondary-500
+          >
             Select Mode
-          </button>
+          </ShimmerButton>
         </Card>
       </div>
     </div>
