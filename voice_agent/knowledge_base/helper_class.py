@@ -1,4 +1,12 @@
 from typing import Dict, List
+import uuid
+import torch
+from transformers import pipeline
+from sentence_transformers import SentenceTransformer
+from sentence_transformers.cross_encoder import CrossEncoder
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, PointStruct
+from config.settings import EMBED_MODEL_NAME, MODELS_DIR, QDRANT_HOST, QDRANT_PORT, COLLECTION
 
 
 class EmbeddingProcessor:
@@ -64,6 +72,132 @@ class EfficientHybridRetriever:
 
         return final_results
 
+    def _vector_search(self, query: str, top_k: int = 10) -> List[Dict]:
+        """Perform vector search using Qdrant"""
+        # Generate query embedding
+        query_vector = self.embedder.embed_texts([query])[0]
+        
+        # Search in Qdrant
+        search_results = self.qdrant_client.search(
+            collection_name=COLLECTION,
+            query_vector=query_vector,
+            limit=top_k,
+        )
+        
+        # Convert results to the expected format
+        formatted_results = []
+        for result in search_results:
+            formatted_results.append({
+                "id": result.id,
+                "score": result.score,
+                "text": result.payload.get("text", ""),
+                "modality": result.payload.get("modality", ""),
+                "source_file": result.payload.get("source_file", ""),
+                "page": result.payload.get("page"),
+                "extra": result.payload.get("extra")
+            })
+            
+        return formatted_results
+
+    def _keyword_search(self, query: str, top_k: int = 10) -> List[Dict]:
+        """Perform keyword search using Qdrant"""
+        # For simplicity, we'll use the same Qdrant client but with a different search strategy
+        # In a more complex implementation, you might use a separate keyword-based search engine
+        try:
+            # Use Qdrant's full-text search capability
+            search_results = self.qdrant_client.search(
+                collection_name=COLLECTION,
+                query_filter={
+                    "must": [
+                        {
+                            "key": "text",
+                            "match": {
+                                "text": query
+                            }
+                        }
+                    ]
+                },
+                limit=top_k,
+            )
+            
+            # Convert results to the expected format
+            formatted_results = []
+            for result in search_results:
+                formatted_results.append({
+                    "id": result.id,
+                    "score": result.score,
+                    "text": result.payload.get("text", ""),
+                    "modality": result.payload.get("modality", ""),
+                    "source_file": result.payload.get("source_file", ""),
+                    "page": result.payload.get("page"),
+                    "extra": result.payload.get("extra")
+                })
+                
+            return formatted_results
+        except Exception as e:
+            print(f"Keyword search failed: {e}")
+            return []
+
+    def _reciprocal_rank_fusion(self, vector_results: List[Dict], keyword_results: List[Dict], top_k: int = 5) -> List[Dict]:
+        """Combine vector and keyword search results using reciprocal rank fusion"""
+        # Create a dictionary to store fused scores
+        fused_scores = {}
+        
+        # Process vector search results
+        for i, result in enumerate(vector_results):
+            doc_id = result["id"]
+            # Reciprocal rank score (1 / rank)
+            fused_scores[doc_id] = fused_scores.get(doc_id, 0) + 1 / (i + 1)
+            
+        # Process keyword search results
+        for i, result in enumerate(keyword_results):
+            doc_id = result["id"]
+            # Reciprocal rank score (1 / rank)
+            fused_scores[doc_id] = fused_scores.get(doc_id, 0) + 1 / (i + 1)
+            
+        # Sort by fused score (descending)
+        sorted_results = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # Reconstruct the result objects with fused scores
+        fused_results = []
+        for doc_id, score in sorted_results[:top_k]:
+            # Find the original result object (either from vector or keyword results)
+            original_result = None
+            for result in vector_results + keyword_results:
+                if result["id"] == doc_id:
+                    original_result = result
+                    break
+                    
+            if original_result:
+                # Update the score with the fused score
+                fused_result = original_result.copy()
+                fused_result["score"] = score
+                fused_results.append(fused_result)
+                
+        return fused_results
+
+    def _cross_encoder_rerank(self, query: str, results: List[Dict], top_k: int = 5) -> List[Dict]:
+        """Rerank results using a cross-encoder model"""
+        if not self.cross_encoder or not results:
+            return results[:top_k]
+            
+        # Prepare pairs of query and document texts
+        pairs = []
+        for result in results:
+            pairs.append([query, result["text"]])
+            
+        # Get relevance scores from cross-encoder
+        scores = self.cross_encoder.predict(pairs)
+        
+        # Add scores to results
+        for i, result in enumerate(results):
+            result["cross_encoder_score"] = float(scores[i])
+            
+        # Sort by cross-encoder score (descending)
+        reranked_results = sorted(results, key=lambda x: x["cross_encoder_score"], reverse=True)
+        
+        return reranked_results[:top_k]
+
 
 class QdrantProcessor:
     def __init__(self):
@@ -77,7 +211,7 @@ class QdrantProcessor:
             c.name for c in self.client.get_collections().collections
         ]:
             # Get vector size from embeddings module
-            from src.core.embeddings import EmbeddingProcessor
+            from knowledge_base.helper_class import EmbeddingProcessor
 
             embedder = EmbeddingProcessor()
             vector_size = embedder.vector_size
@@ -199,7 +333,16 @@ Answer:"""
                         return generated_text.split("<|assistant|>")[-1].strip()
                     return generated_text.strip()
             else:
-                return generated_text.strip()
+                # Handle case where response is a string
+                generated_text = response
+                # Remove prompt from response
+                if prompt in generated_text:
+                    return generated_text.replace(prompt, "").strip()
+                else:
+                    # For Phi-3 format
+                    if "<|assistant|>" in generated_text:
+                        return generated_text.split("<|assistant|>")[-1].strip()
+                    return generated_text.strip()
         except Exception as e:
             print(f"Generation failed, falling back to template: {e}")
             return self._template_based_synthesis(query, retrieved_chunks)

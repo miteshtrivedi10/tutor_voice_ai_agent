@@ -18,22 +18,28 @@ pip install -e .
 
 ## Running the Application
 
-The application consists of two components:
+The application consists of three components:
 
-1. **API Server** - Handles HTTP requests for creating voice sessions:
+1. **API Server** - Handles HTTP requests for creating voice sessions and searching the knowledge base:
 ```bash
-python main.py
+python api.py
 ```
 
 2. **Agent Worker** - Runs the voice agents that connect to LiveKit:
 ```bash
-python worker.py
+python main.py
 ```
 
 ## API Endpoints
 
+### Voice Session Endpoints
 - `POST /voice/connect` - Create a new voice session
 - `POST /voice/disconnect/{room_name}` - Disconnect a voice session
+
+### Search Endpoints
+- `POST /search` - Search the knowledge base
+- `POST /search/enhanced` - Enhanced search with response synthesis
+- `GET /health` - Health check endpoint
 
 ## How It Works
 

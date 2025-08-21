@@ -1,5 +1,5 @@
 [project]
-name = "qwen-voice"
+name = "voice_agent"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -17,5 +17,10 @@ dependencies = [
     "python-multipart>=0.0.20",
     "pytest>=8.4.1",
     "httpx>=0.28.1",
+    "sentence-transformers>=5.1.0",
+    "torch>=2.8.0",
+    "torch-vision>=0.1.6.dev0",
+    "transformers>=4.55.2",
+    "qdrant-client>=1.15.1",
 ]
 
