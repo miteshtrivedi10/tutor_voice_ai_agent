@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -31,3 +32,30 @@ class TtsMetricCollectorDto(BaseModel):
     characters_count: int
     duration: float
     timestamp: float
+
+
+class SearchResult(BaseModel):
+    id: str
+    score: float
+    text: str
+    modality: str
+    source_file: str
+    page: Optional[int] = None
+    extra: Optional[Dict[str, Any]] = None
+
+
+class IngestResponse(BaseModel):
+    file: str
+    chunks_indexed: int
+
+
+class SearchResponse(BaseModel):
+    results: List[SearchResult]
+
+
+class ChunkPayload(BaseModel):
+    text: str
+    modality: str
+    source_file: str
+    page: Optional[int]
+    extra: Optional[Dict[str, Any]] = None
