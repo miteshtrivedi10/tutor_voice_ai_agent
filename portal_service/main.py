@@ -55,7 +55,7 @@ async def create_voice_session():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/upload_files")
+@app.post("/upload-files")
 async def upload_files(
     file: UploadFile, user_id: str = Form(...), subject_name: str = Form(...)
 ):
