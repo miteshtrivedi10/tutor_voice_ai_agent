@@ -3,6 +3,7 @@ import os
 # -------------------------
 # Config
 # -------------------------
+# Qdrant configuration
 QDRANT_HOST = os.getenv("QDRANT_HOST", "127.0.0.1")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 COLLECTION = os.getenv("QDRANT_COLLECTION", "kb")
@@ -14,6 +15,7 @@ EMBED_MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
 # Using a CPU-friendly model for better performance
 VLM_MODEL_NAME = os.getenv("VLM_MODEL", "Salesforce/blip-image-captioning-base")
 
+# Storage directories
 STORAGE_DIR = os.getenv("STORAGE_DIR", "./storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
@@ -24,3 +26,8 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 # Directory for image captures
 IMAGE_CAPTURES_DIR = os.getenv("IMAGE_CAPTURES_DIR", "./image_captures")
 os.makedirs(IMAGE_CAPTURES_DIR, exist_ok=True)
+
+# LiveKit configuration
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "your-api-key")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "your-api-secret")

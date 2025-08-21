@@ -14,6 +14,8 @@ Or install individually:
 uv add <package_name>
 ```
 
+2. The project now uses `loguru` for logging. All logs are configured in `config/logging_config.py`.
+
 2. Configure environment variables in `.env`:
 - `SARVAM_API_KEY` - Sarvam API key for STT/TTS
 - `GROQ_API_KEY` - Groq API key for LLM

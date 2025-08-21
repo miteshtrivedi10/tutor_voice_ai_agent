@@ -22,5 +22,6 @@ dependencies = [
     "torch-vision>=0.1.6.dev0",
     "transformers>=4.55.2",
     "qdrant-client>=1.15.1",
+    "loguru>=0.7.3",
 ]
 

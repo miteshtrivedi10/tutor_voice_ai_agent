@@ -7,6 +7,7 @@ from sentence_transformers.cross_encoder import CrossEncoder
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 from config.settings import EMBED_MODEL_NAME, MODELS_DIR, QDRANT_HOST, QDRANT_PORT, COLLECTION
+from config.logging_config import logger
 
 
 class EmbeddingProcessor:
@@ -22,12 +23,12 @@ class EmbeddingProcessor:
                 EMBED_MODEL_NAME, cache_folder=MODELS_DIR, local_files_only=True
             )
         except Exception as e:
-            print(f"Failed to load embedding model from local cache: {e}")
-            print("Downloading embedding model...")
+            logger.warning(f"Failed to load embedding model from local cache: {e}")
+            logger.info("Downloading embedding model...")
             self.embedder = SentenceTransformer(
                 EMBED_MODEL_NAME, cache_folder=MODELS_DIR
             )
-            print("Embedding model downloaded successfully")
+            logger.info("Embedding model downloaded successfully")
 
         self.vector_size = self.embedder.get_sentence_embedding_dimension()
 
@@ -49,7 +50,7 @@ class EfficientHybridRetriever:
                 "cross-encoder/ms-marco-MiniLM-L-2-v2"
             )  # 34MB
         except Exception as e:
-            print(f"Failed to load cross-encoder, will use basic ranking: {e}")
+            logger.warning(f"Failed to load cross-encoder, will use basic ranking: {e}")
             self.cross_encoder = None
 
     def search(self, query: str, top_k: int = 5, alpha: float = 0.7) -> List[Dict]:
@@ -135,7 +136,7 @@ class EfficientHybridRetriever:
                 
             return formatted_results
         except Exception as e:
-            print(f"Keyword search failed: {e}")
+            logger.error(f"Keyword search failed: {e}")
             return []
 
     def _reciprocal_rank_fusion(self, vector_results: List[Dict], keyword_results: List[Dict], top_k: int = 5) -> List[Dict]:
@@ -273,16 +274,16 @@ class LightweightResponseSynthesizer:
                     trust_remote_code=True,  # Some models need this
                 )
                 self.model_name = model_description
-                print(f"Successfully loaded {model_description}")
+                logger.info(f"Successfully loaded {model_description}")
                 break
             except Exception as e:
-                print(f"Failed to load {model_description}: {e}")
+                logger.warning(f"Failed to load {model_description}: {e}")
                 continue
 
         if self.generator:
-            print(f"Using {self.model_name} for response synthesis")
+            logger.info(f"Using {self.model_name} for response synthesis")
         else:
-            print("Falling back to template-based approach")
+            logger.info("Falling back to template-based approach")
 
     def synthesize(self, query: str, retrieved_chunks: List[Dict]) -> str:
         if not self.generator:
@@ -344,7 +345,7 @@ Answer:"""
                         return generated_text.split("<|assistant|>")[-1].strip()
                     return generated_text.strip()
         except Exception as e:
-            print(f"Generation failed, falling back to template: {e}")
+            logger.error(f"Generation failed, falling back to template: {e}")
             return self._template_based_synthesis(query, retrieved_chunks)
 
     def _prepare_compact_context(self, chunks: List[Dict]) -> str:

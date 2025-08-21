@@ -7,35 +7,21 @@ It connects to LiveKit and waits for jobs to create voice agents.
 """
 
 import asyncio
-import logging
 import os
 from dotenv import load_dotenv
 from livekit.agents import JobContext, Worker, WorkerOptions
 from tutor_agent import agent_entrypoint
+from config.settings import LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
+from config.logging_config import logger
 
 # Load environment variables
-load_dotenv(override=True)
+_ = load_dotenv(dotenv_path=".env", override=True)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("/tmp/worker.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# LiveKit configuration
-LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
-LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "your-api-key")
-LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "your-api-secret")
 
 async def main():
     """Main entrypoint for the worker"""
     logger.info("Starting Voice Agent Worker...")
-    
+
     # Create worker
     worker = Worker(
         WorkerOptions(
@@ -45,10 +31,11 @@ async def main():
             api_secret=LIVEKIT_API_SECRET,
         )
     )
-    
+
     # Run the worker
     logger.info("Worker started, waiting for jobs...")
     await worker.run()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

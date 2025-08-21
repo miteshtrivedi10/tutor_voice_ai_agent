@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -17,9 +16,8 @@ from livekit.plugins import sarvam, groq, silero, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.english import EnglishModel
 from tavily import TavilyClient
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Logger is configured via config.logging_config
+from config.logging_config import logger
 
 # Load environment variables
 _ = load_dotenv(override=True)
@@ -96,7 +94,7 @@ class TutorVoiceAgent(Agent):
     def llm_node(self, chat_ctx, tools, model_settings):
         # Apply sliding window logic to limit context size
         chat_ctx.items = chat_ctx.items[-10:]  # Keep only the last 10 messages
-        print(f"Total Messages In Context : {len(chat_ctx.items)}")
+        logger.info(f"Total Messages In Context : {len(chat_ctx.items)}")
         return Agent.default.llm_node(self, chat_ctx, tools, model_settings)
 
 
