@@ -9,6 +9,7 @@ __pycache__/
 
 # Custom files
 .env
+.serena
 
 # Distribution / packaging
 .Python
