@@ -4,9 +4,14 @@ A voice-based tutoring agent using LiveKit and AI technologies.
 
 ## Setup
 
-1. Install dependencies:
+1. Install dependencies using `uv`:
 ```bash
-pip install -e .
+uv sync
+```
+
+Or install individually:
+```bash
+uv add <package_name>
 ```
 
 2. Configure environment variables in `.env`:
