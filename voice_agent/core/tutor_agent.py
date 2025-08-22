@@ -1,7 +1,4 @@
 import asyncio
-import json
-import os
-from urllib import response
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -19,18 +16,19 @@ from livekit.agents import (
 from livekit.plugins import sarvam, groq, silero, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.english import EnglishModel
 from tavily import TavilyClient
-from tools import evaluate_answer, rag_tool
-from groq import Groq
+from core.tools import evaluate_answer, rag_tool_wrapper
 
 # Logger is configured via config.logging_config
 from config.logging_config import logger
-from voice_agent.config.settings import (
+from config.settings import (
     DEEPGRAM_API_KEY,
     LLM_API_KEY,
     SARVAM_API_KEY,
     TAVILY_API_KEY,
 )
-from voice_agent.instructions import DEVELOPMENT
+from core.instructions import DEVELOPMENT
+from langchain_core.messages import trim_messages
+from langchain_core.messages.utils import count_tokens_approximately
 
 # Load environment variables
 _ = load_dotenv(override=True)
@@ -52,9 +50,6 @@ speech_to_text = sarvam.STT(
 #     speaker="manisha",
 #     pace=1.1,
 # )
-
-from langchain_core.messages import trim_messages
-from langchain_core.messages.utils import count_tokens_approximately
 
 
 def safe_history(messages, max_tokens=1000):
@@ -111,7 +106,7 @@ class TutorVoiceAgent(Agent):
                 str: The response retrieved from the RAG tool based on the query.
             """
 
-            response = await rag_tool({"query": query})
+            response = rag_tool_wrapper(query)
             return response
 
         @function_tool

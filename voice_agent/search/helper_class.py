@@ -1,19 +1,20 @@
 from typing import Dict, List
 import uuid
 import torch
+import time
 from transformers import pipeline
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.cross_encoder import CrossEncoder
-from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
-from ..config.settings import (
+import os
+from config.settings import (
     EMBED_MODEL_NAME,
+    MILVUS_API_KEY,
+    MILVUS_ENDPOINT,
     MODELS_DIR,
-    QDRANT_HOST,
-    QDRANT_PORT,
     COLLECTION,
 )
-from ..config.logging_config import logger
+from config.logging_config import logger
+from pymilvus import MilvusClient, DataType, CollectionSchema, FieldSchema
 
 
 class EmbeddingProcessor:
@@ -24,10 +25,16 @@ class EmbeddingProcessor:
 
     def _load_model(self):
         """Load embedding model with fallback to download"""
+        # Add a delay before loading to prevent memory issues
+        logger.info("Waiting 5 seconds before loading embedding model...")
+        time.sleep(5)
+        
         try:
+            logger.info(f"Attempting to load embedding model from: {MODELS_DIR}")
             self.embedder = SentenceTransformer(
                 EMBED_MODEL_NAME, cache_folder=MODELS_DIR, local_files_only=True
             )
+            logger.info("Successfully loaded embedding model from local cache")
         except Exception as e:
             logger.warning(f"Failed to load embedding model from local cache: {e}")
             logger.info("Downloading embedding model...")
@@ -45,19 +52,32 @@ class EmbeddingProcessor:
 
 
 class EfficientHybridRetriever:
-    def __init__(self, qdrant_client, embedder):
-        self.qdrant_client = qdrant_client
+    def __init__(self, milvus_client, embedder):
+        self.milvus_client = milvus_client
         self.embedder = embedder
 
         # Use small cross-encoder model
+        # Add a delay before loading to prevent memory issues
+        logger.info("Waiting 5 seconds before loading cross-encoder model...")
+        time.sleep(5)
+        
         try:
             # MiniLM-based cross-encoder (small and efficient)
+            logger.info(f"Attempting to load cross-encoder model from: {MODELS_DIR}")
             self.cross_encoder = CrossEncoder(
-                "cross-encoder/ms-marco-MiniLM-L-2-v2"
-            )  # 34MB
+                "cross-encoder/ms-marco-MiniLM-L-2-v2",
+                cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
+                local_files_only=True,  # Try to load from local cache first
+            )
+            logger.info("Successfully loaded cross-encoder model from local cache")
         except Exception as e:
-            logger.warning(f"Failed to load cross-encoder, will use basic ranking: {e}")
-            self.cross_encoder = None
+            logger.warning(f"Failed to load cross-encoder from local cache: {e}")
+            logger.info("Downloading cross-encoder model...")
+            self.cross_encoder = CrossEncoder(
+                "cross-encoder/ms-marco-MiniLM-L-2-v2",
+                cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
+            )
+            logger.info("Cross-encoder model downloaded successfully")
 
     def search(self, query: str, top_k: int = 5, alpha: float = 0.7) -> List[Dict]:
         # Vector search results
@@ -80,15 +100,14 @@ class EfficientHybridRetriever:
         return final_results
 
     def _vector_search(self, query: str, top_k: int = 10) -> List[Dict]:
-        """Perform vector search using Qdrant"""
+        """Perform vector search using Milvus"""
         # Generate query embedding
         query_vector = self.embedder.embed_texts([query])[0]
 
-        # Search in Qdrant
-        search_results = self.qdrant_client.search(
-            collection_name=COLLECTION,
+        # Search in Milvus
+        search_results = self.milvus_client.search(
             query_vector=query_vector,
-            limit=top_k,
+            top_k=top_k,
         )
 
         # Convert results to the expected format
@@ -109,15 +128,17 @@ class EfficientHybridRetriever:
         return formatted_results
 
     def _keyword_search(self, query: str, top_k: int = 10) -> List[Dict]:
-        """Perform keyword search using Qdrant"""
-        # For simplicity, we'll use the same Qdrant client but with a different search strategy
+        """Perform keyword search using Milvus"""
+        # For simplicity, we'll use the same Milvus client but with a different search strategy
         # In a more complex implementation, you might use a separate keyword-based search engine
         try:
-            # Use Qdrant's full-text search capability
-            search_results = self.qdrant_client.search(
-                collection_name=COLLECTION,
-                query_filter={"must": [{"key": "text", "match": {"text": query}}]},
-                limit=top_k,
+            # Note: Milvus doesn't have built-in full-text search like Qdrant,
+            # so we'll perform a simple vector search as a placeholder
+            # In a production environment, you might want to integrate with Elasticsearch or similar
+            # Milvus doesn't support query_filter like Qdrant, so we'll just do a regular search
+            search_results = self.milvus_client.search(
+                query_vector=self.embedder.embed_texts([query])[0],
+                top_k=top_k,
             )
 
             # Convert results to the expected format
@@ -138,7 +159,8 @@ class EfficientHybridRetriever:
             return formatted_results
         except Exception as e:
             logger.error(f"Keyword search failed: {e}")
-            return []
+            # Fallback to vector search if keyword search is not supported
+            return self._vector_search(query, top_k)
 
     def _reciprocal_rank_fusion(
         self, vector_results: List[Dict], keyword_results: List[Dict], top_k: int = 5
@@ -207,45 +229,102 @@ class EfficientHybridRetriever:
         return reranked_results[:top_k]
 
 
-class QdrantProcessor:
+class MilvusProcessor:
     def __init__(self):
-        self.client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
-        self.collection = COLLECTION
-        self._ensure_collection_exists()
+        # Initialize Milvus client with cloud endpoint and API key
+        logger.info(f"Connecting to Milvus at {MILVUS_ENDPOINT}")
 
-    def _ensure_collection_exists(self):
-        """Ensure the Qdrant collection exists"""
-        if self.collection not in [
-            c.name for c in self.client.get_collections().collections
-        ]:
-            # Get vector size from embeddings module
-            from knowledge_base.helper_class import EmbeddingProcessor
+        self.client = MilvusClient(
+            uri=MILVUS_ENDPOINT,  # Cloud endpoint
+            token=MILVUS_API_KEY,  # API key and secret
+        )
+        self.collection = COLLECTION
+        self._validate_collection()
+
+    def _validate_collection(self):
+        """Validate that the Milvus collection exists"""
+        try:
+            # Check if collection exists
+            if not self.client.has_collection(self.collection):
+                error_msg = f"Collection {self.collection} not available. Please ensure the collection exists in Milvus."
+                logger.error(error_msg)
+                raise SystemExit(error_msg)
+
+            # Get vector size from embeddings module for validation
+            from search.helper_class import EmbeddingProcessor
 
             embedder = EmbeddingProcessor()
-            vector_size = embedder.vector_size
+            self.vector_size = embedder.vector_size
 
-            self.client.create_collection(
-                collection_name=self.collection,
-                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+            # Load collection
+            self.client.load_collection(self.collection)
+
+            logger.info(
+                f"Collection {self.collection} validated and loaded successfully"
             )
 
-    def upsert_chunks(self, chunks: list, vectors: list):
-        """Upsert chunks with their vectors into Qdrant"""
-        if not chunks:
-            return
-        points = [
-            PointStruct(id=str(uuid.uuid4()), vector=v, payload=c)
-            for v, c in zip(vectors, chunks)
-        ]
-        self.client.upsert(collection_name=self.collection, points=points)
+        except SystemExit:
+            # Re-raise SystemExit to exit the application
+            raise
+        except Exception as e:
+            error_msg = f"Error validating collection: {e}"
+            logger.error(error_msg)
+            raise SystemExit(error_msg)
 
     def search(self, query_vector: list, top_k: int = 5):
-        """Search for similar vectors in Qdrant"""
-        return self.client.search(
-            collection_name=self.collection,
-            query_vector=query_vector,
-            limit=min(max(top_k, 1), 50),
-        )
+        """Search for similar vectors in Milvus"""
+        try:
+            search_params = {
+                "metric_type": "COSINE",
+                "params": {"nprobe": 10},
+            }
+
+            results = self.client.search(
+                collection_name=self.collection,
+                data=[query_vector],
+                anns_field="vector",
+                search_params=search_params,
+                limit=min(max(top_k, 1), 50),
+                output_fields=[
+                    "id",
+                    "text",
+                    "modality",
+                    "source_file",
+                    "page",
+                    "extra",
+                ],
+            )
+
+            # Format results to match the expected interface (mimic Qdrant result structure)
+            formatted_results = []
+            if results:
+                for hit in results[0]:
+                    # Create a mock object that mimics the Qdrant result structure
+                    class MockResult:
+                        def __init__(self, id, score, payload):
+                            self.id = id
+                            self.score = score
+                            self.payload = payload
+
+                    formatted_results.append(
+                        MockResult(
+                            id=hit.get("id", ""),
+                            score=hit.get("distance", 0),
+                            payload={
+                                "text": hit.get("text", ""),
+                                "modality": hit.get("modality", ""),
+                                "source_file": hit.get("source_file", ""),
+                                "page": hit.get("page"),
+                                "extra": hit.get("extra", {}),
+                            },
+                        )
+                    )
+
+            return formatted_results
+        except Exception as e:
+            logger.error(f"Error searching vectors: {e}")
+            # Return empty list as fallback
+            return []
 
 
 class LightweightResponseSynthesizer:
@@ -271,6 +350,13 @@ class LightweightResponseSynthesizer:
 
         for model_path, model_description in models_in_order:
             try:
+                # Add a delay before loading to prevent memory issues
+                logger.info(f"Waiting 5 seconds before loading {model_description}...")
+                time.sleep(5)
+                
+                logger.info(
+                    f"Attempting to load {model_description} from: {MODELS_DIR}"
+                )
                 self.generator = pipeline(
                     "text-generation",
                     model=model_path,
@@ -279,6 +365,7 @@ class LightweightResponseSynthesizer:
                         torch.float16 if torch.cuda.is_available() else torch.float32
                     ),
                     trust_remote_code=True,  # Some models need this
+                    cache_dir=MODELS_DIR,  # Ensure models are downloaded to the correct directory
                 )
                 self.model_name = model_description
                 logger.info(f"Successfully loaded {model_description}")

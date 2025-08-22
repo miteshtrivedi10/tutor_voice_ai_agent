@@ -21,7 +21,7 @@ dependencies = [
     "torch>=2.8.0",
     "torch-vision>=0.1.6.dev0",
     "transformers>=4.55.2",
-    "qdrant-client>=1.15.1",
+    "pymilvus>=2.5.0",
     "loguru>=0.7.3",
     "groq>=0.31.0",
 ]

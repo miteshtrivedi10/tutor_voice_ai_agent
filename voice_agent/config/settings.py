@@ -1,12 +1,21 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 # -------------------------
 # Config
 # -------------------------
-# Qdrant configuration
-QDRANT_HOST = os.getenv("QDRANT_HOST", "127.0.0.1")
-QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge")
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # Points to rag_pipeline/
+dotenv_path = BASE_DIR / ".env"
+load_dotenv(dotenv_path)
+
+# Milvus configuration (Cloud-based)
+MILVUS_ENDPOINT = os.getenv("MILVUS_ENDPOINT", "your-milvus-endpoint")
+MILVUS_API_KEY = os.getenv("MILVUS_API_KEY", "your-milvus-api-key")
+COLLECTION = os.getenv("MILVUS_COLLECTION", "knowledge")
 
 # Text embedding model (open-source, strong general-purpose, 1024+ dimensions).
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")

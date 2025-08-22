@@ -1,7 +1,7 @@
 import json
 from groq import Groq
 from config.settings import LLM_API_KEY
-from knowledge_base.search import enhanced_search
+from search.search import enhanced_search
 from config.logging_config import logger
 
 
