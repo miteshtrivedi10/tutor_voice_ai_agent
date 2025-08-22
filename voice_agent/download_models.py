@@ -12,9 +12,42 @@ from config.logging_config import logger
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+def download_turn_detector_model():
+    """Download the turn-detector model if not already present"""
+    logger.info("Checking for turn-detector model...")
+    
+    # Check if the turn-detector model is already downloaded
+    turn_detector_path = os.path.join(MODELS_DIR, "models--livekit--turn-detector")
+    if os.path.exists(turn_detector_path):
+        logger.info("Turn-detector model already exists")
+        return True
+    
+    try:
+        logger.info("Downloading turn-detector model...")
+        from huggingface_hub import snapshot_download
+        snapshot_download(
+            "livekit/turn-detector",
+            revision="v1.2.2-en",
+            cache_dir=MODELS_DIR
+        )
+        logger.info("Turn-detector model downloaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error downloading turn-detector model: {e}")
+        return False
+
 def download_models():
     """Download all required models"""
     logger.info("Starting model download process...")
+    
+    # First, download the turn-detector model
+    if not download_turn_detector_model():
+        logger.error("Failed to download turn-detector model")
+        return False
+    
+    # Add a delay before loading the next models
+    logger.info("Waiting 5 seconds before loading next models...")
+    time.sleep(5)
     
     # Import the classes that trigger model downloads
     try:

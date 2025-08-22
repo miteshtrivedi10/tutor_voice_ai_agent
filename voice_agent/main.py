@@ -22,21 +22,22 @@ async def main():
     """Main entrypoint for the worker"""
     logger.info("Starting Voice Agent Worker...")
     
-    # Set HF_HOME to ensure models are loaded from the correct directory
-    os.environ["HF_HOME"] = MODELS_DIR
-    
     # Ensure all models are downloaded before starting the worker
+    # Check if models are already loaded to avoid duplicate loading
+    models_already_loaded = False
     try:
-        # Check if models are already loaded to avoid duplicate loading
-        try:
-            # Try to import search components to check if models are already loaded
-            from search.search import enhanced_search
-            logger.info("Search components already initialized, skipping model download")
-            success = True
-        except ImportError:
-            # Models not loaded yet, proceed with download
-            from download_models import download_models
-            success = download_models()
+        # Try to import search components to check if models are already loaded
+        from search.helper_class import EmbeddingProcessor
+        # If we can import the class without triggering model loading, models might be loaded
+        # For now, we'll be conservative and always run download_models to ensure models are available
+        logger.info("Proceeding with model download to ensure all models are available")
+    except ImportError:
+        logger.info("Search components not yet available, will run model download")
+    
+    # Always run download_models to ensure models are available (with proper delays)
+    try:
+        from download_models import download_models
+        success = download_models()
         if not success:
             logger.error("Failed to download required models. Exiting...")
             return

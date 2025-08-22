@@ -1,4 +1,5 @@
 import asyncio
+import os
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -25,8 +26,9 @@ from config.settings import (
     LLM_API_KEY,
     SARVAM_API_KEY,
     TAVILY_API_KEY,
+    MODELS_DIR,
 )
-from core.instructions import DEVELOPMENT
+from core.instructions import DEVELOPMENT, PRODUCTION
 from langchain_core.messages import trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 
@@ -35,6 +37,9 @@ _ = load_dotenv(override=True)
 
 # Initialize Tavily client
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
+
+# Set HF_HOME to ensure Hugging Face models are loaded from the correct directory
+os.environ["HF_HOME"] = MODELS_DIR
 
 # Initialize components
 speech_to_text = sarvam.STT(
@@ -80,11 +85,6 @@ class TutorVoiceAgent(Agent):
         # Define tools
         self.answer_ratings = []
 
-        def eval_tool_wrapper(question: str, student_answer: str):
-            scores = evaluate_answer(question, student_answer)
-            self.store_rating(question, student_answer, scores)
-            return scores  # return so LLM can see it if needed
-
         # eval_tool = Tool(
         #     name="EvaluateAnswer",
         #     description="Evaluate a student's answer against the expected answer. Returns JSON with scores.",
@@ -95,54 +95,26 @@ class TutorVoiceAgent(Agent):
         #     func=eval_tool_wrapper,
         # )
 
-        @function_tool
-        async def search_knowledge(self, context: RunContext, query: str) -> str:
-            """
-            Asynchronously searches for knowledge based on the provided query using a retrieval-augmented generation (RAG) tool.
-            Args:
-                context (RunContext): The current runtime context for the operation.
-                query (str): The search query string.
-            Returns:
-                str: The response retrieved from the RAG tool based on the query.
-            """
-
-            response = rag_tool_wrapper(query)
-            return response
-
-        @function_tool
-        async def evaluation_tool(
-            self, context: RunContext, question: str, student_answer: str
-        ) -> dict:
-            """
-            Evaluates a student's answer to a given question using an evaluation tool.
-
-            Args:
-                context (RunContext): The current execution context.
-                question (str): The question posed to the student.
-                student_answer (str): The student's answer to the question.
-
-            Returns:
-                dict: A dictionary containing the evaluation scores of the student's answer.
-            """
-
-            scores = eval_tool_wrapper(question, student_answer)
-            return scores
-
         super().__init__(
-            instructions=DEVELOPMENT,
+            instructions=PRODUCTION,
             turn_detection=EnglishModel(),
             allow_interruptions=True,
             vad=silero.VAD.load(),
             stt=speech_to_text,
             tts=text_to_speech,
             llm=large_language_model,
-            tools=[search_knowledge, evaluation_tool],
+            # tools=[search_knowledge, evaluation_tool],
         )
 
     def store_rating(self, question: str, student_answer: str, scores: dict):
         self.answer_ratings.append(
             {"question": question, "student_answer": student_answer, **scores}
         )
+
+    def eval_tool_wrapper(self, question: str, student_answer: str):
+        scores = evaluate_answer(question, student_answer)
+        self.store_rating(question, student_answer, scores)
+        return scores  # return so LLM can see it if needed
 
     def export_ratings(self):
         return self.answer_ratings
@@ -159,6 +131,39 @@ class TutorVoiceAgent(Agent):
         chat_ctx.items = chat_ctx.items[-10:]  # Keep only the last 10 messages
         logger.info(f"Total Messages In Context : {len(chat_ctx.items)}")
         return Agent.default.llm_node(self, chat_ctx, tools, model_settings)
+
+    @function_tool
+    async def search_knowledge(self, context: RunContext, query: str) -> str:
+        """
+        Asynchronously searches for knowledge based on the provided query using a retrieval-augmented generation (RAG) tool.
+        Args:
+            context (RunContext): The current runtime context for the operation.
+            query (str): The search query string.
+        Returns:
+            str: The response retrieved from the RAG tool based on the query.
+        """
+
+        response = rag_tool_wrapper(query)
+        return response
+
+    @function_tool
+    async def evaluation_tool(
+        self, context: RunContext, question: str, student_answer: str
+    ) -> dict:
+        """
+        Evaluates a student's answer to a given question using an evaluation tool.
+
+        Args:
+            context (RunContext): The current execution context.
+            question (str): The question posed to the student.
+            student_answer (str): The student's answer to the question.
+
+        Returns:
+            dict: A dictionary containing the evaluation scores of the student's answer.
+        """
+
+        scores = self.eval_tool_wrapper(question, student_answer)
+        return scores
 
 
 async def agent_entrypoint(ctx: JobContext):

@@ -28,8 +28,9 @@ VLM_MODEL_NAME = os.getenv("VLM_MODEL", "Salesforce/blip-image-captioning-base")
 STORAGE_DIR = os.getenv("STORAGE_DIR", "./storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
-# Directory for downloaded models
-MODELS_DIR = os.getenv("MODELS_DIR", "./downloaded_models")
+# Directory for downloaded models (absolute path)
+MODELS_DIR = os.getenv("MODELS_DIR", str(BASE_DIR / "downloaded_models"))
+MODELS_DIR = os.path.abspath(MODELS_DIR)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 # Directory for image captures
