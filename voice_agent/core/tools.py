@@ -3,12 +3,18 @@ from groq import Groq
 from config.settings import LLM_API_KEY
 from search.search import enhanced_search
 from config.logging_config import logger
+from core.model_manager import get_embedding_processor, get_cross_encoder, get_response_synthesizer
 
 
 def rag_tool_wrapper(query: str) -> str:
     """
     Wrapper to call enhanced_search and return the synthesized response.
     """
+    # Load models on-demand using the model manager
+    embedder = get_embedding_processor()
+    cross_encoder = get_cross_encoder()
+    synthesizer = get_response_synthesizer()
+    
     result = enhanced_search(query)
     return result["synthesized_response"]
 
@@ -21,6 +27,11 @@ def evaluate_answer(question: str, student_answer: str) -> dict:
     Evaluate student's answer.
     Returns dict with correctness, completeness, vocabulary, speech.
     """
+    # Load models on-demand using the model manager
+    embedder = get_embedding_processor()
+    cross_encoder = get_cross_encoder()
+    synthesizer = get_response_synthesizer()
+    
     system_prompt = """You are a strict but friendly evaluator.
     Rate the student's answer between 0.0 and 1.0 on these metrics:
     - correctness (60%)

@@ -14,6 +14,7 @@ from config.settings import (
     COLLECTION,
 )
 from config.logging_config import logger
+from core.model_manager import model_manager
 from pymilvus import MilvusClient, DataType, CollectionSchema, FieldSchema
 
 
@@ -25,9 +26,6 @@ class EmbeddingProcessor:
 
     def _load_model(self):
         """Load embedding model with fallback to download"""
-        # Add a delay before loading to prevent memory issues
-        logger.info("Waiting 5 seconds before loading embedding model...")
-        time.sleep(5)
         
         try:
             logger.info(f"Attempting to load embedding model from: {MODELS_DIR}")
@@ -45,6 +43,9 @@ class EmbeddingProcessor:
 
         self.vector_size = self.embedder.get_sentence_embedding_dimension()
 
+        # Small delay to ensure system resources are available
+        time.sleep(0.1)
+
     def embed_texts(self, texts: list):
         """Generate embeddings for a list of texts"""
         # Normalize via SentenceTransformer (already L2/cosine friendly)
@@ -55,11 +56,6 @@ class EfficientHybridRetriever:
     def __init__(self, milvus_client, embedder):
         self.milvus_client = milvus_client
         self.embedder = embedder
-
-        # Use small cross-encoder model
-        # Add a delay before loading to prevent memory issues
-        logger.info("Waiting 5 seconds before loading cross-encoder model...")
-        time.sleep(5)
         
         try:
             # MiniLM-based cross-encoder (small and efficient)
@@ -78,6 +74,9 @@ class EfficientHybridRetriever:
                 cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
             )
             logger.info("Cross-encoder model downloaded successfully")
+
+        # Small delay to ensure system resources are available
+        time.sleep(0.1)
 
     def search(self, query: str, top_k: int = 5, alpha: float = 0.7) -> List[Dict]:
         # Vector search results
@@ -131,11 +130,13 @@ class EfficientHybridRetriever:
         """Perform keyword search using Milvus"""
         # For simplicity, we'll use the same Milvus client but with a different search strategy
         # In a more complex implementation, you might use a separate keyword-based search engine
+        # Milvus doesn't have built-in full-text search like Qdrant,
+        # so we'll perform a simple vector search as a placeholder
+        # In a production environment, you might want to integrate with Elasticsearch or similar
+        # Milvus doesn't support query_filter like Qdrant, so we'll just do a regular search
         try:
-            # Note: Milvus doesn't have built-in full-text search like Qdrant,
+            # Note: Milvus doesn't support full-text search like Qdrant,
             # so we'll perform a simple vector search as a placeholder
-            # In a production environment, you might want to integrate with Elasticsearch or similar
-            # Milvus doesn't support query_filter like Qdrant, so we'll just do a regular search
             search_results = self.milvus_client.search(
                 query_vector=self.embedder.embed_texts([query])[0],
                 top_k=top_k,
@@ -330,30 +331,29 @@ class MilvusProcessor:
 class LightweightResponseSynthesizer:
     def __init__(self):
         # Try Phi-3 Mini first (recommended approach), then TinyLlama, then fallback
+
         models_in_order = [
             (
                 "microsoft/Phi-3-mini-4k-instruct",
                 "Phi-3 Mini (2.2GB)",
             ),  # 2.2GB - recommended
-            (
-                "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                "TinyLlama (1.1GB)",
-            ),  # 1.1GB - fallback
-            (
-                "stabilityai/stablelm-2-zephyr-1_6b",
-                "StableLM (1.6GB)",
-            ),  # 1.6GB - alternative
+            # (
+            #     "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+            #     "TinyLlama (1.1GB)",
+            # ),  # 1.1GB - fallback
+            # (
+            #     "stabilityai/stablelm-2-zephyr-1_6b",
+            #     "StableLM (1.6GB)",
+            # ),  # 1.6GB - alternative
         ]
 
         self.generator = None
         self.model_name = None
 
+        
+
         for model_path, model_description in models_in_order:
             try:
-                # Add a delay before loading to prevent memory issues
-                logger.info(f"Waiting 5 seconds before loading {model_description}...")
-                time.sleep(5)
-                
                 logger.info(
                     f"Attempting to load {model_description} from: {MODELS_DIR}"
                 )
@@ -378,6 +378,9 @@ class LightweightResponseSynthesizer:
             logger.info(f"Using {self.model_name} for response synthesis")
         else:
             logger.info("Falling back to template-based approach")
+
+        # Small delay to ensure system resources are available
+        time.sleep(0.1)
 
     def synthesize(self, query: str, retrieved_chunks: List[Dict]) -> str:
         if not self.generator:

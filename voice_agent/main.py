@@ -13,6 +13,11 @@ from livekit.agents import JobContext, Worker, WorkerOptions
 from core.tutor_agent import agent_entrypoint
 from config.settings import LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, MODELS_DIR
 from config.logging_config import logger
+from core.model_manager import (
+    get_cross_encoder,
+    get_embedding_processor,
+    get_response_synthesizer,
+)
 
 # Load environment variables
 _ = load_dotenv(dotenv_path=".env", override=True)
@@ -21,38 +26,36 @@ _ = load_dotenv(dotenv_path=".env", override=True)
 async def main():
     """Main entrypoint for the worker"""
     logger.info("Starting Voice Agent Worker...")
-    
-    # Ensure all models are downloaded before starting the worker
-    # Check if models are already loaded to avoid duplicate loading
-    models_already_loaded = False
-    try:
-        # Try to import search components to check if models are already loaded
-        from search.helper_class import EmbeddingProcessor
-        # If we can import the class without triggering model loading, models might be loaded
-        # For now, we'll be conservative and always run download_models to ensure models are available
-        logger.info("Proceeding with model download to ensure all models are available")
-    except ImportError:
-        logger.info("Search components not yet available, will run model download")
-    
-    # Always run download_models to ensure models are available (with proper delays)
-    try:
-        from download_models import download_models
-        success = download_models()
-        if not success:
-            logger.error("Failed to download required models. Exiting...")
-            return
-        logger.info("All required models are available")
-    except Exception as e:
-        logger.error(f"Error during model download process: {e}")
-        return
 
-    # Create worker
+    # Load all models upfront in a controlled manner
+    logger.info("Loading all models...")
+    try:
+        embedder = get_embedding_processor()
+        logger.info("Embedding processor loaded")
+        # Small delay between model loads
+        await asyncio.sleep(0.1)
+
+        cross_encoder = get_cross_encoder()
+        logger.info("Cross encoder loaded")
+        # Small delay between model loads
+        await asyncio.sleep(0.1)
+
+        synthesizer = get_response_synthesizer()
+        logger.info("Response synthesizer loaded")
+
+        logger.info("All models loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load models: {e}")
+        raise
+
+    # Create worker with models already loaded
     worker = Worker(
         WorkerOptions(
             entrypoint_fnc=agent_entrypoint,
             ws_url=LIVEKIT_URL,
             api_key=LIVEKIT_API_KEY,
             api_secret=LIVEKIT_API_SECRET,
+            initialize_process_timeout=30.0,  # Keep reasonable timeout
         )
     )
 

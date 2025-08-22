@@ -8,6 +8,7 @@ from livekit.agents import (
     BackgroundAudioPlayer,
     JobContext,
     RoomInputOptions,
+    AutoSubscribe,
     WorkerOptions,
     RunContext,
     cli,
@@ -29,6 +30,11 @@ from config.settings import (
     MODELS_DIR,
 )
 from core.instructions import DEVELOPMENT, PRODUCTION
+from core.model_manager import (
+    get_embedding_processor,
+    get_cross_encoder,
+    get_response_synthesizer,
+)
 from langchain_core.messages import trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 
@@ -142,6 +148,10 @@ class TutorVoiceAgent(Agent):
         Returns:
             str: The response retrieved from the RAG tool based on the query.
         """
+        # Load models on-demand using the model manager
+        # embedder = get_embedding_processor()
+        # cross_encoder = get_cross_encoder()
+        # synthesizer = get_response_synthesizer()
 
         response = rag_tool_wrapper(query)
         return response
@@ -161,6 +171,10 @@ class TutorVoiceAgent(Agent):
         Returns:
             dict: A dictionary containing the evaluation scores of the student's answer.
         """
+        # Load models on-demand using the model manager
+        # embedder = get_embedding_processor()
+        # cross_encoder = get_cross_encoder()
+        # synthesizer = get_response_synthesizer()
 
         scores = self.eval_tool_wrapper(question, student_answer)
         return scores
@@ -171,7 +185,7 @@ async def agent_entrypoint(ctx: JobContext):
     logger.info(f"Agent starting for room: {ctx.room.name}")
 
     try:
-        await ctx.connect()
+        await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
         logger.info(f"Connected to room: {ctx.room.name}")
 
         # Create agent session
@@ -216,4 +230,5 @@ async def agent_entrypoint(ctx: JobContext):
 
 # For running as a standalone worker
 if __name__ == "__main__":
+
     cli.run_app(WorkerOptions(entrypoint_fnc=agent_entrypoint))
