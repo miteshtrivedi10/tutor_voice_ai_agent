@@ -1,11 +1,11 @@
-from voice_agent.knowledge_base.helper_class import (
+from .helper_class import (
     EfficientHybridRetriever,
     EmbeddingProcessor,
     LightweightResponseSynthesizer,
     QdrantProcessor,
 )
-from voice_agent.model.dtos import SearchResponse
-from config.logging_config import logger
+from ..model.dtos import SearchResponse
+from ..config.logging_config import logger
 
 
 embedding_processor = EmbeddingProcessor()

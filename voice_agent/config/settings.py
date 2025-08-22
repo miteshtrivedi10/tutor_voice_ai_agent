@@ -6,7 +6,7 @@ import os
 # Qdrant configuration
 QDRANT_HOST = os.getenv("QDRANT_HOST", "127.0.0.1")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-COLLECTION = os.getenv("QDRANT_COLLECTION", "kb")
+COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge")
 
 # Text embedding model (open-source, strong general-purpose, 1024+ dimensions).
 EMBED_MODEL_NAME = os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
@@ -31,3 +31,7 @@ os.makedirs(IMAGE_CAPTURES_DIR, exist_ok=True)
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "your-api-key")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "your-api-secret")
+SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "your-sarvam-api-key")
+LLM_API_KEY = os.getenv("GROQ_API_KEY", "your-llm-api-key")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "your-tavily-api-key")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "your-deepgram-api-key")

@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+from urllib import response
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -9,22 +11,29 @@ from livekit.agents import (
     JobContext,
     RoomInputOptions,
     WorkerOptions,
+    RunContext,
     cli,
+    function_tool,
     BuiltinAudioClip,
 )
 from livekit.plugins import sarvam, groq, silero, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.english import EnglishModel
 from tavily import TavilyClient
+from tools import evaluate_answer, rag_tool
+from groq import Groq
 
 # Logger is configured via config.logging_config
 from config.logging_config import logger
+from voice_agent.config.settings import (
+    DEEPGRAM_API_KEY,
+    LLM_API_KEY,
+    SARVAM_API_KEY,
+    TAVILY_API_KEY,
+)
+from voice_agent.instructions import DEVELOPMENT
 
 # Load environment variables
 _ = load_dotenv(override=True)
-SARVAM_API_KEY = os.getenv("SARVAM_API_KEY", "your-sarvam-api-key")
-LLM_API_KEY = os.getenv("GROQ_API_KEY", "your-llm-api-key")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "your-tavily-api-key")
-DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "your-deepgram-api-key")
 
 # Initialize Tavily client
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
@@ -33,6 +42,7 @@ tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 speech_to_text = sarvam.STT(
     language="en-IN", model="saarika:v2.5", api_key=SARVAM_API_KEY
 )
+
 
 # text_to_speech = sarvam.TTS(
 #     target_language_code="en-IN",
@@ -73,16 +83,74 @@ large_language_model = groq.LLM(
 class TutorVoiceAgent(Agent):
     def __init__(self, ctx: JobContext):
         # Define tools
+        self.answer_ratings = []
+
+        def eval_tool_wrapper(question: str, student_answer: str):
+            scores = evaluate_answer(question, student_answer)
+            self.store_rating(question, student_answer, scores)
+            return scores  # return so LLM can see it if needed
+
+        # eval_tool = Tool(
+        #     name="EvaluateAnswer",
+        #     description="Evaluate a student's answer against the expected answer. Returns JSON with scores.",
+        #     parameters={
+        #         "question": {"type": "string"},
+        #         "student_answer": {"type": "string"},
+        #     },
+        #     func=eval_tool_wrapper,
+        # )
+
+        @function_tool
+        async def search_knowledge(self, context: RunContext, query: str) -> str:
+            """
+            Asynchronously searches for knowledge based on the provided query using a retrieval-augmented generation (RAG) tool.
+            Args:
+                context (RunContext): The current runtime context for the operation.
+                query (str): The search query string.
+            Returns:
+                str: The response retrieved from the RAG tool based on the query.
+            """
+
+            response = await rag_tool({"query": query})
+            return response
+
+        @function_tool
+        async def evaluation_tool(
+            self, context: RunContext, question: str, student_answer: str
+        ) -> dict:
+            """
+            Evaluates a student's answer to a given question using an evaluation tool.
+
+            Args:
+                context (RunContext): The current execution context.
+                question (str): The question posed to the student.
+                student_answer (str): The student's answer to the question.
+
+            Returns:
+                dict: A dictionary containing the evaluation scores of the student's answer.
+            """
+
+            scores = eval_tool_wrapper(question, student_answer)
+            return scores
 
         super().__init__(
-            instructions="You are helpful assistant which provides information related to Indian Railways",
+            instructions=DEVELOPMENT,
             turn_detection=EnglishModel(),
             allow_interruptions=True,
             vad=silero.VAD.load(),
             stt=speech_to_text,
             tts=text_to_speech,
             llm=large_language_model,
+            tools=[search_knowledge, evaluation_tool],
         )
+
+    def store_rating(self, question: str, student_answer: str, scores: dict):
+        self.answer_ratings.append(
+            {"question": question, "student_answer": student_answer, **scores}
+        )
+
+    def export_ratings(self):
+        return self.answer_ratings
 
     async def on_enter(self):
         self.session.generate_reply(

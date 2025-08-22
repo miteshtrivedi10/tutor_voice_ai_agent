@@ -23,5 +23,6 @@ dependencies = [
     "transformers>=4.55.2",
     "qdrant-client>=1.15.1",
     "loguru>=0.7.3",
+    "groq>=0.31.0",
 ]
 
