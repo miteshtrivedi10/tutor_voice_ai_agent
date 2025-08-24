@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import uuid
 from dotenv import load_dotenv
 import uvicorn
@@ -18,12 +19,19 @@ LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "your-api-secret")
 
 
 @app.post("/voice")
-async def create_voice_session():
+async def create_voice_session(
+    user_id: str, name: Optional[str] = "NA", email: Optional[str] = "NA"
+) -> VoiceSessionResponse:
     """Create new voice session with WebRTC connection"""
     try:
+
+        print(
+            f"Creating voice session for user_id: {user_id}, name: {name}, email: {email}"
+        )
+
         # Generate unique room and participant
         room_name = f"voice_session_{uuid.uuid4().hex[:8]}"
-        participant_name = f"user_{uuid.uuid4().hex[:6]}"
+        participant_name = user_id
 
         # Create room token
         token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
