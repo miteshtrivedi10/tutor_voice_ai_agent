@@ -264,6 +264,15 @@ wheels = [
 ]
 
 [[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1090,6 +1099,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/e4/86/946dd8e290f357f62
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d6/00/9bec26ea62120b72c7958023cbc1d4a991888da482be9fd0e98cafd7e094/livekit_protocol-1.0.5-py3-none-any.whl", hash = "sha256:a1e4c67e4803f1496279a6b5cd8af9be1c186b1454cd99e8e1e4967b6c71cf9e", size = 67652, upload-time = "2025-08-05T16:09:24.57Z" },
 ]
+
+[[package]]
+name = "llama-cpp-python"
+version = "0.3.16"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "diskcache" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/b4/c8cd17629ced0b9644a71d399a91145aedef109c0333443bef015e45b704/llama_cpp_python-0.3.16.tar.gz", hash = "sha256:34ed0f9bd9431af045bb63d9324ae620ad0536653740e9bb163a2e1fcb973be6", size = 50688636, upload-time = "2025-08-15T04:58:29.212Z" }
 
 [[package]]
 name = "loguru"
@@ -2849,6 +2870,7 @@ dependencies = [
     { name = "livekit" },
     { name = "livekit-agents", extra = ["deepgram", "groq", "sarvam", "silero", "turn-detector"] },
     { name = "livekit-plugins-noise-cancellation" },
+    { name = "llama-cpp-python" },
     { name = "loguru" },
     { name = "pydantic" },
     { name = "pymilvus" },
@@ -2872,6 +2894,7 @@ requires-dist = [
     { name = "livekit", extras = ["server", "voice-agent-pipeline", "voiceagentpipeline"], specifier = ">=1.0.12" },
     { name = "livekit-agents", extras = ["deepgram", "groq", "sarvam", "silero", "turn-detector"], specifier = ">=1.2.5" },
     { name = "livekit-plugins-noise-cancellation", specifier = ">=0.2.5" },
+    { name = "llama-cpp-python", specifier = ">=0.3.16" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pymilvus", specifier = ">=2.5.0" },

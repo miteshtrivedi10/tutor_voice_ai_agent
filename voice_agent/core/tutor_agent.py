@@ -29,12 +29,7 @@ from config.settings import (
     TAVILY_API_KEY,
     MODELS_DIR,
 )
-from core.instructions import DEVELOPMENT, PRODUCTION
-from core.model_manager import (
-    get_embedding_processor,
-    get_cross_encoder,
-    get_response_synthesizer,
-)
+from core.instructions import PRODUCTION
 from langchain_core.messages import trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 
@@ -90,16 +85,6 @@ class TutorVoiceAgent(Agent):
     def __init__(self, ctx: JobContext):
         # Define tools
         self.answer_ratings = []
-
-        # eval_tool = Tool(
-        #     name="EvaluateAnswer",
-        #     description="Evaluate a student's answer against the expected answer. Returns JSON with scores.",
-        #     parameters={
-        #         "question": {"type": "string"},
-        #         "student_answer": {"type": "string"},
-        #     },
-        #     func=eval_tool_wrapper,
-        # )
 
         super().__init__(
             instructions=PRODUCTION,

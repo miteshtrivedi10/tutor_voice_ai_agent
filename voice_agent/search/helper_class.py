@@ -15,18 +15,23 @@ from config.settings import (
 )
 from config.logging_config import logger
 from core.model_manager import model_manager
+
 from pymilvus import MilvusClient, DataType, CollectionSchema, FieldSchema
 
 
 class EmbeddingProcessor:
     def __init__(self):
         self.embedder = None
-        self.vector_size = None
-        self._load_model()
+        self.vector_size = 384  # Set default vector size for BAAI/bge-base-en-v1.5
+        # Use local models only
+        self.use_hf_api = False
+
+        if not self.use_hf_api:
+            self._load_model()
 
     def _load_model(self):
         """Load embedding model with fallback to download"""
-        
+
         try:
             logger.info(f"Attempting to load embedding model from: {MODELS_DIR}")
             self.embedder = SentenceTransformer(
@@ -56,24 +61,30 @@ class EfficientHybridRetriever:
     def __init__(self, milvus_client, embedder):
         self.milvus_client = milvus_client
         self.embedder = embedder
-        
-        try:
-            # MiniLM-based cross-encoder (small and efficient)
-            logger.info(f"Attempting to load cross-encoder model from: {MODELS_DIR}")
-            self.cross_encoder = CrossEncoder(
-                "cross-encoder/ms-marco-MiniLM-L-2-v2",
-                cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
-                local_files_only=True,  # Try to load from local cache first
-            )
-            logger.info("Successfully loaded cross-encoder model from local cache")
-        except Exception as e:
-            logger.warning(f"Failed to load cross-encoder from local cache: {e}")
-            logger.info("Downloading cross-encoder model...")
-            self.cross_encoder = CrossEncoder(
-                "cross-encoder/ms-marco-MiniLM-L-2-v2",
-                cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
-            )
-            logger.info("Cross-encoder model downloaded successfully")
+        self.cross_encoder = None
+        self.use_hf_api = False
+
+        # Always use local models
+        if True:  # not self.use_hf_api:
+            try:
+                # MiniLM-based cross-encoder (small and efficient)
+                logger.info(
+                    f"Attempting to load cross-encoder model from: {MODELS_DIR}"
+                )
+                self.cross_encoder = CrossEncoder(
+                    "cross-encoder/ms-marco-MiniLM-L-2-v2",
+                    cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
+                    local_files_only=True,  # Try to load from local cache first
+                )
+                logger.info("Successfully loaded cross-encoder model from local cache")
+            except Exception as e:
+                logger.warning(f"Failed to load cross-encoder from local cache: {e}")
+                logger.info("Downloading cross-encoder model...")
+                self.cross_encoder = CrossEncoder(
+                    "cross-encoder/ms-marco-MiniLM-L-2-v2",
+                    cache_folder=MODELS_DIR,  # Ensure model is downloaded to the correct directory
+                )
+                logger.info("Cross-encoder model downloaded successfully")
 
         # Small delay to ensure system resources are available
         time.sleep(0.1)
@@ -207,27 +218,31 @@ class EfficientHybridRetriever:
         self, query: str, results: List[Dict], top_k: int = 5
     ) -> List[Dict]:
         """Rerank results using a cross-encoder model"""
-        if not self.cross_encoder or not results:
+        if not results:
             return results[:top_k]
 
-        # Prepare pairs of query and document texts
-        pairs = []
-        for result in results:
-            pairs.append([query, result["text"]])
+        else:
+            if not self.cross_encoder:
+                return results[:top_k]
 
-        # Get relevance scores from cross-encoder
-        scores = self.cross_encoder.predict(pairs)
+            # Prepare pairs of query and document texts
+            pairs = []
+            for result in results:
+                pairs.append([query, result["text"]])
 
-        # Add scores to results
-        for i, result in enumerate(results):
-            result["cross_encoder_score"] = float(scores[i])
+            # Get relevance scores from cross-encoder
+            scores = self.cross_encoder.predict(pairs)
 
-        # Sort by cross-encoder score (descending)
-        reranked_results = sorted(
-            results, key=lambda x: x["cross_encoder_score"], reverse=True
-        )
+            # Add scores to results
+            for i, result in enumerate(results):
+                result["cross_encoder_score"] = float(scores[i])
 
-        return reranked_results[:top_k]
+            # Sort by cross-encoder score (descending)
+            reranked_results = sorted(
+                results, key=lambda x: x["cross_encoder_score"], reverse=True
+            )
+
+            return reranked_results[:top_k]
 
 
 class MilvusProcessor:
@@ -331,7 +346,6 @@ class MilvusProcessor:
 class LightweightResponseSynthesizer:
     def __init__(self):
         # Try Phi-3 Mini first (recommended approach), then TinyLlama, then fallback
-
         models_in_order = [
             (
                 "microsoft/Phi-3-mini-4k-instruct",
@@ -349,35 +363,71 @@ class LightweightResponseSynthesizer:
 
         self.generator = None
         self.model_name = None
+        self.use_hf_api = False
+        self.use_llama_cpp = False
 
-        
-
-        for model_path, model_description in models_in_order:
+        if not self.use_hf_api:
+            # Try to load with llama-cpp-python first
             try:
-                logger.info(
-                    f"Attempting to load {model_description} from: {MODELS_DIR}"
-                )
-                self.generator = pipeline(
-                    "text-generation",
-                    model=model_path,
-                    device=0 if torch.cuda.is_available() else -1,
-                    torch_dtype=(
-                        torch.float16 if torch.cuda.is_available() else torch.float32
-                    ),
-                    trust_remote_code=True,  # Some models need this
-                    cache_dir=MODELS_DIR,  # Ensure models are downloaded to the correct directory
-                )
-                self.model_name = model_description
-                logger.info(f"Successfully loaded {model_description}")
-                break
-            except Exception as e:
-                logger.warning(f"Failed to load {model_description}: {e}")
-                continue
+                from llama_cpp import Llama
 
-        if self.generator:
-            logger.info(f"Using {self.model_name} for response synthesis")
-        else:
-            logger.info("Falling back to template-based approach")
+                # Path to the GGUF model file
+                gguf_model_path = os.path.join(
+                    MODELS_DIR, "phi-3-mini-4k-instruct.Q4_K_M.gguf"
+                )
+
+                if os.path.exists(gguf_model_path):
+                    logger.info(f"Loading GGUF model from: {gguf_model_path}")
+                    self.generator = Llama(
+                        model_path=gguf_model_path,
+                        n_ctx=4096,  # Context length
+                        n_threads=4,  # Number of CPU threads
+                        n_gpu_layers=(
+                            -1 if torch.cuda.is_available() else 0
+                        ),  # Use GPU if available
+                    )
+                    self.model_name = "Phi-3 Mini (GGUF)"
+                    self.use_llama_cpp = True
+                    logger.info("Successfully loaded GGUF model")
+                else:
+                    logger.warning(f"GGUF model not found at: {gguf_model_path}")
+            except ImportError:
+                logger.warning(
+                    "llama-cpp-python not installed, falling back to transformers"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load GGUF model: {e}")
+
+            # Fallback to transformers if GGUF model is not available
+            if not self.use_llama_cpp:
+                for model_path, model_description in models_in_order:
+                    try:
+                        logger.info(
+                            f"Attempting to load {model_description} from: {MODELS_DIR}"
+                        )
+                        self.generator = pipeline(
+                            "text-generation",
+                            model=model_path,
+                            device=0 if torch.cuda.is_available() else -1,
+                            torch_dtype=(
+                                torch.float16
+                                if torch.cuda.is_available()
+                                else torch.float32
+                            ),
+                            trust_remote_code=True,  # Some models need this
+                            cache_dir=MODELS_DIR,  # Ensure models are downloaded to the correct directory
+                        )
+                        self.model_name = model_description
+                        logger.info(f"Successfully loaded {model_description}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to load {model_description}: {e}")
+                        continue
+
+            if self.generator:
+                logger.info(f"Using {self.model_name} for response synthesis")
+            else:
+                logger.info("Falling back to template-based approach")
 
         # Small delay to ensure system resources are available
         time.sleep(0.1)
@@ -391,7 +441,7 @@ class LightweightResponseSynthesizer:
         context = self._prepare_compact_context(retrieved_chunks)
 
         # Create efficient prompt - model-specific formatting
-        if "Phi-3" in self.model_name:
+        if "Phi-3" in (self.model_name or ""):
             # Phi-3 specific prompt format
             prompt = f"""
 <|user|>
@@ -408,42 +458,71 @@ Context: {context[:800]}  # Limit context for small models
 Question: {query}
 Answer:"""
 
-        # Generate response with conservative parameters
-        try:
-            response = self.generator(
-                prompt,
-                max_new_tokens=200,  # Limit output length
-                temperature=0.7,
-                do_sample=True,
-                top_p=0.9,
-                repetition_penalty=1.2,
-            )
+        if self.use_llama_cpp:
+            # Use llama-cpp-python for text generation
+            try:
+                response = self.generator(
+                    prompt,
+                    max_tokens=200,  # Limit output length
+                    temperature=0.7,
+                    top_p=0.9,
+                    repeat_penalty=1.2,
+                    stop=[
+                        "<|end|>",
+                        "<|user|>",
+                        "<|assistant|>",
+                    ],  # Stop tokens for Phi-3
+                )
 
-            # Extract generated text (handling different response formats)
-            if isinstance(response, list) and len(response) > 0:
-                generated_text = response[0]["generated_text"]
-                # Remove prompt from response
-                if prompt in generated_text:
-                    return generated_text.replace(prompt, "").strip()
-                else:
-                    # For Phi-3 format
-                    if "<|assistant|>" in generated_text:
-                        return generated_text.split("<|assistant|>")[-1].strip()
+                # Extract generated text
+                if isinstance(response, dict) and "choices" in response:
+                    generated_text = response["choices"][0]["text"]
                     return generated_text.strip()
-            else:
-                # Handle case where response is a string
-                generated_text = response
-                # Remove prompt from response
-                if prompt in generated_text:
-                    return generated_text.replace(prompt, "").strip()
                 else:
-                    # For Phi-3 format
-                    if "<|assistant|>" in generated_text:
-                        return generated_text.split("<|assistant|>")[-1].strip()
-                    return generated_text.strip()
-        except Exception as e:
-            logger.error(f"Generation failed, falling back to template: {e}")
-            return self._template_based_synthesis(query, retrieved_chunks)
+                    # Handle unexpected response format
+                    return str(response).strip()
+            except Exception as e:
+                logger.error(
+                    f"Generation failed with llama-cpp-python, falling back to template: {e}"
+                )
+                return self._template_based_synthesis(query, retrieved_chunks)
+        else:
+            # Generate response with conservative parameters
+            try:
+                response = self.generator(
+                    prompt,
+                    max_new_tokens=200,  # Limit output length
+                    temperature=0.7,
+                    do_sample=True,
+                    top_p=0.9,
+                    repetition_penalty=1.2,
+                )
+
+                # Extract generated text (handling different response formats)
+                if isinstance(response, list) and len(response) > 0:
+                    generated_text = response[0]["generated_text"]
+                    # Remove prompt from response
+                    if prompt in generated_text:
+                        return generated_text.replace(prompt, "").strip()
+                    else:
+                        # For Phi-3 format
+                        if "<|assistant|>" in generated_text:
+                            return generated_text.split("<|assistant|>")[-1].strip()
+                        return generated_text.strip()
+                else:
+                    # Handle case where response is a string
+                    generated_text = response
+                    # Remove prompt from response
+                    if prompt in generated_text:
+                        return generated_text.replace(prompt, "").strip()
+                    else:
+                        # For Phi-3 format
+                        if "<|assistant|>" in generated_text:
+                            return generated_text.split("<|assistant|>")[-1].strip()
+                        return generated_text.strip()
+            except Exception as e:
+                logger.error(f"Generation failed, falling back to template: {e}")
+                return self._template_based_synthesis(query, retrieved_chunks)
 
     def _prepare_compact_context(self, chunks: List[Dict]) -> str:
         """Prepare compact context with proper formatting"""

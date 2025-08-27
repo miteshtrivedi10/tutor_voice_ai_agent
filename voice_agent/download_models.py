@@ -98,6 +98,18 @@ def download_models():
         logger.error("Failed to download turn-detector model")
         return False
 
+    # Download the GGUF model
+    try:
+        logger.info("Downloading/loading GGUF model...")
+        from download_gguf_model import download_gguf_model
+        if not download_gguf_model():
+            logger.error("Failed to download GGUF model")
+            return False
+        logger.info("GGUF model downloaded successfully")
+    except Exception as e:
+        logger.error(f"Error downloading GGUF model: {e}")
+        return False
+
     # Add a delay before loading the next models
     # logger.info("Waiting 5 seconds before loading next models...")
     # time.sleep(5)
