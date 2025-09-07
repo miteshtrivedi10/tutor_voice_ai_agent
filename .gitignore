@@ -12,6 +12,9 @@ __pycache__/
 .serena
 downloaded_models
 logs
+ignore_this_folder
+KMS
+
 
 # Distribution / packaging
 .Python
