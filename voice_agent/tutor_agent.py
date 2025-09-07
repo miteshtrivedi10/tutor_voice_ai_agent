@@ -57,6 +57,7 @@ from run_quiz_agent import (
 )
 from config.logging_config import logger
 from model.agent_dtos import ChatTranscript, UsageMetrics
+from voice_agent.supabase_client import get_db_client
 
 NO_STUDENT_NAME = "Student name is Missing. Required"
 NO_SUBJECT = "Subject is missing. Required"
@@ -284,7 +285,7 @@ async def agent_entrypoint(ctx: JobContext):
 
     async def log_usage():
         summary = usage_collector.get_summary()
-        update_db = UsageMetrics(
+        metrics = UsageMetrics(
             session_id="",
             user_name=session.userdata.user_name,
             mt_llm_completiontokens=summary.llm_completion_tokens,
@@ -294,10 +295,12 @@ async def agent_entrypoint(ctx: JobContext):
             mt_tts_audioduration=summary.tts_audio_duration,
             mt_tts_characterscount=summary.tts_characters_count,
         )
-        logger.info(f"Usage Metrics Stored for user : {session.userdata.user_name}")
+        if get_db_client().update_usage_metrics_in_db(metrics):
+            logger.info(f"Usage Metrics Stored for user : {session.userdata.user_name}")
+
+        logger.error(f"Unable to store metrics for user : {session.userdata.user_name}")
 
     ctx.add_shutdown_callback(log_usage)
-
     await session.start(
         agent=TutorVoiceAgent(
             ctx=ctx,

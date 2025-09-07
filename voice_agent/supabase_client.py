@@ -5,7 +5,7 @@ Supabase client module for fetching Q&A data
 from supabase import create_client, Client
 from config.settings import SUPABASE_URL, SUPABASE_KEY
 from config.logging_config import logger
-from model.agent_dtos import QuizPackFromDb, QnAFromDb
+from model.agent_dtos import QuizPackFromDb, QnAFromDb, UsageMetrics
 from qa_metrics.pedant import PEDANT
 
 
@@ -33,8 +33,80 @@ class SupabaseQnAClient:
 
         self._initialized = True
 
-    def update_usage_metrics_in_db(self):
-        pass
+    def update_usage_metrics_in_db(self, metrics: UsageMetrics) -> bool:
+        """
+        Update or create usage metrics in the database based on session_id.
+
+        Args:
+            metrics (UsageMetrics): The usage metrics to store
+
+        Returns:
+            bool: True if stored successfully, False otherwise
+        """
+        # If client is not initialized, return False
+        if not self.client:
+            logger.warning("Supabase client not initialized")
+            return False
+
+        try:
+            # Convert metrics to dictionary, excluding default values
+            metrics_dict = metrics.model_dump(exclude_defaults=True)
+
+            # Ensure session_id is present
+            if "session_id" not in metrics_dict or not metrics_dict["session_id"]:
+                logger.error("Session ID is required to update usage metrics")
+                return False
+
+            # Get session_id and remove it from the dict for upsert
+            session_id = metrics_dict.pop("session_id")
+
+            # Handle default values for optional fields
+            # For fields that might not be present, we'll set them to their default values
+            # This ensures we don't miss any fields in the upsert operation
+            default_values = {
+                "user_name": "Not Set",
+                "mt_stt_audioduration": 0.0,
+                "mt_llm_duration": 0,
+                "mt_llm_completiontokens": 0,
+                "mt_llm_prompttokens": 0,
+                "mt_llm_promptcachetokens": 0,
+                "mt_llm_totaltokens": 0,
+                "mt_llm_tokenspersecond": 0.0,
+                "mt_llm_ttft": 0.0,
+                "mt_tts_audioduration": 0.0,
+                "mt_tts_characterscount": 0,
+                "mt_tts_duration": 0,
+                "mt_tts_ttfb": 0,
+                "mt_eou_utterancedelay": 0,
+                "mt_eou_transcriptiondelay": 0,
+            }
+
+            # Apply default values for any missing fields
+            for key, default_value in default_values.items():
+                if key not in metrics_dict:
+                    metrics_dict[key] = default_value
+
+            # Add session_id back to the dict for database operation
+            metrics_dict["session_id"] = session_id
+
+            # Perform upsert operation (insert or update)
+            response = self.client.table("usage_metrics").upsert(metrics_dict).execute()
+
+            # Check if the operation was successful
+            if response.data:
+                logger.info(
+                    f"Successfully updated/created usage metrics for session: {session_id}"
+                )
+                return True
+            else:
+                logger.warning(
+                    f"Failed to update/create usage metrics for session: {session_id}"
+                )
+                return False
+
+        except Exception as e:
+            logger.error(f"Error updating/creating usage metrics in Supabase: {e}")
+            return False
 
     def fetch_random_questions(
         self, user_id: str, subject: str, limit: int = 10
@@ -128,7 +200,7 @@ def initialise_pedant() -> PEDANT:
     return _pedant
 
 
-def intialise_db_client() -> SupabaseQnAClient:
+def get_db_client() -> SupabaseQnAClient:
     global _supabase_qna_client
     if _supabase_qna_client is None:
         _supabase_qna_client = SupabaseQnAClient()

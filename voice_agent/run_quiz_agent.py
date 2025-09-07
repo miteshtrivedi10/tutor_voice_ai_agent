@@ -23,7 +23,7 @@ from livekit.plugins import openai, sarvam, groq
 from config.logging_config import logger
 from model.agent_dtos import QuizPackFromDb
 from supabase_client import SupabaseQnAClient, initialise_pedant
-from supabase_client import intialise_db_client
+from supabase_client import get_db_client
 from qa_metrics.pedant import PEDANT
 
 # Load environment variables
@@ -188,7 +188,7 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
             logger.info(
                 f"Fetching questions for user: {self.user_name}, subject: {self.subject}"
             )
-            quiz_pack_from_db = intialise_db_client().fetch_random_questions(
+            quiz_pack_from_db = get_db_client().fetch_random_questions(
                 self.user_name, self.subject, 3
             )
 
