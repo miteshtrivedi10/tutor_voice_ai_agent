@@ -26,7 +26,7 @@ from livekit.agents import (
     get_job_context,
     JobContext,
 )
-from open_telemtry import configure_opentelemetry
+from src.utils.open_telemtry import configure_opentelemetry
 from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,22 +42,22 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from config.logging_config import logger
+from src.config.logging_config import logger
 from livekit.agents import function_tool
 from livekit.plugins import silero, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.api import DeleteRoomRequest
 from livekit import agents
 
-from run_quiz_agent import (
+from src.run_quiz_agent import (
     QuizTaskEngine,
     speech_to_text,
     text_to_speech,
     large_language_model,
 )
-from config.logging_config import logger
-from model.agent_dtos import ChatTranscript, UsageMetrics
-from voice_agent.supabase_client import get_db_client
+from src.config.logging_config import logger
+from src.models.agent_dtos import ChatTranscript, UsageMetrics
+from src.database.supabase_client import get_db_client
 
 NO_STUDENT_NAME = "Student name is Missing. Required"
 NO_SUBJECT = "Subject is missing. Required"

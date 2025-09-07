@@ -1,6 +1,8 @@
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 import re
+from typing import Dict, List, Literal
+from pydantic import BaseModel
 
 
 class QnAFromDb(BaseModel):

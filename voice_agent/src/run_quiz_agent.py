@@ -20,10 +20,10 @@ from livekit.plugins import (
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.plugins import openai, sarvam, groq
 
-from config.logging_config import logger
-from model.agent_dtos import QuizPackFromDb
-from supabase_client import SupabaseQnAClient, initialise_pedant
-from supabase_client import get_db_client
+from src.config.logging_config import logger
+from src.models.agent_dtos import QuizPackFromDb
+from src.database.supabase_client import SupabaseQnAClient, initialise_pedant
+from src.database.supabase_client import get_db_client
 from qa_metrics.pedant import PEDANT
 
 # Load environment variables

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # -------------------------
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent  # Points to rag_pipeline/
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # Points to voice_agent/
 dotenv_path = BASE_DIR / ".env"
 load_dotenv(dotenv_path, override=True)
 
