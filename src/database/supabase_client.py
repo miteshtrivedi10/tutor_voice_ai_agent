@@ -1,15 +1,15 @@
 """
 Supabase client module for fetching Q&A data
 """
-
 from supabase import create_client, Client
 from src.config.settings import SUPABASE_URL, SUPABASE_KEY
 from src.config.logging_config import logger
 from src.models.agent_dtos import QuizPackFromDb, QnAFromDb, UsageMetrics
+from src.database.interfaces import DatabaseRepository
 from qa_metrics.pedant import PEDANT
 
 
-class SupabaseQnAClient:
+class SupabaseQnAClient(DatabaseRepository):
     _instance = None
     _initialized = False
 
@@ -36,10 +36,10 @@ class SupabaseQnAClient:
     def update_usage_metrics_in_db(self, metrics: UsageMetrics) -> bool:
         """
         Update or create usage metrics in the database based on session_id.
-
+        
         Args:
             metrics (UsageMetrics): The usage metrics to store
-
+            
         Returns:
             bool: True if stored successfully, False otherwise
         """
@@ -113,12 +113,12 @@ class SupabaseQnAClient:
     ) -> QuizPackFromDb:
         """
         Fetch random questions and answers for a user and subject
-
+        
         Args:
             user_id (str): The participant/user ID
             subject (str): The subject (Science, English, Social Studies)
             limit (int): Maximum number of questions to fetch (default: 10)
-
+            
         Returns:
             QuizPackFromDb: Object containing list of questions and a message
         """

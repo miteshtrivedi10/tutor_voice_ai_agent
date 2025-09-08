@@ -8,13 +8,12 @@ __pycache__/
 
 
 # Custom files
-.env
 .serena
 downloaded_models
 logs
 ignore_this_folder
 KMS
-
+.roo
 
 # Distribution / packaging
 .Python
@@ -146,6 +145,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.backup
 .envrc
 .venv
 env/

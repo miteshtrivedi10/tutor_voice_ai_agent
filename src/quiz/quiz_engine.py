@@ -1,87 +1,30 @@
+"""
+Quiz engine implementation for the voice tutor application
+"""
 from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List
 from dotenv import load_dotenv
+
 from livekit.agents import AgentTask, function_tool
 from livekit.agents.llm import FunctionTool, RawFunctionTool
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.agents.llm.llm import ChatChunk
 from livekit.agents.voice.agent import ModelSettings
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
-from livekit.agents import (
-    RunContext,
-)
-from livekit.plugins import (
-    deepgram,
-    silero,
-    openai,
-)
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
-from livekit.plugins import openai, sarvam, groq
+from livekit.agents import RunContext
+from livekit.plugins import silero
 
 from src.config.logging_config import logger
 from src.models.agent_dtos import QuizPackFromDb
-from src.database.supabase_client import SupabaseQnAClient, initialise_pedant
 from src.database.supabase_client import get_db_client
-from qa_metrics.pedant import PEDANT
+from src.voice.voice_processing import speech_to_text, text_to_speech, large_language_model
+from src.qa_metrics.evaluator import initialise_pedant
+
 
 # Load environment variables
 load_dotenv(override=True)
-
-
-# Initialize components
-# speech_to_text = deepgram.STT(
-#     language="en-IN",
-#     profanity_filter=True,
-#     punctuate=False,
-#     detect_language=False,
-#     interim_results=False,
-#     filler_words=False,
-#     mip_opt_out=True,
-#     smart_format=True,
-#     model="nova-3-general",
-# )
-speech_to_text = sarvam.STT(
-    model="saarika:v2.5",
-    language="en-IN",
-)
-
-# text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-thalia-en")
-
-text_to_speech = sarvam.TTS(
-    model="bulbul:v2",
-    target_language_code="en-IN",
-    speaker="karun",
-    # pitch=0.7,
-    # pace=0.7,
-    enable_preprocessing=True,
-)
-
-large_language_model = groq.LLM(
-    model="moonshotai/kimi-k2-instruct",
-    temperature=0.4,
-    tool_choice="auto",
-    top_p=0.8,
-)
-
-# large_language_model = openai.LLM.with_ollama(
-#     model="deepseek-chat",
-#     temperature=0.4,
-#     tool_choice="auto",
-#     top_p=0.7,
-#     reasoning_effort="low",
-# )
-
-# large_language_model = openai.LLM(
-#     model="meta-llama/llama-3.3-70b-instruct:free",
-#     api_key="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",
-#     base_url="https://openrouter.ai/api/v1",
-#     temperature=0.4,
-#     top_p=0.7,
-#     reasoning_effort="low",
-#     tool_choice="auto",
-# )
 
 
 @dataclass
@@ -163,13 +106,6 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
     ) -> str:
         """
         Evaluates a student's answer to a given question and returns an assessment result.
-        Args:
-            context (RunContext): The runtime context containing session and user data.
-            question (str): The question being evaluated.
-            answer (str): The correct answer to the question.
-            student_answer (str): The student's provided answer.
-        Returns:
-            str: The assessment result, which can be "Correct", "Incorrect", or "Incomplete".
         """
         logger.info(f"Evaluating answer for question with id: {question_id}")
         quiz_data: QuizTaskData = self.session.userdata
@@ -230,18 +166,9 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
     ) -> str:
         """
         Determines whether the quiz has been completed based on the current question number.
-
-        Args:
-            total_quiz_questions (int): The total number of questions in the quiz.
-            current_question_number (int): The number of the current question being answered.
-
-        Returns:
-            str: A message indicating whether the quiz is completed or not.
         """
-
         if current_question_number <= total_quiz_questions:
             return "Quiz is not completed yet."
-
         return "Quiz is now completed"
 
     @function_tool
@@ -250,11 +177,6 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
     ) -> None:
         """
         Handles the completion of the quiz by the user.
-        Args:
-            quiz_completed_message (str): A message indicating that the quiz has been completed.
-        Side Effects:
-            Prints a confirmation message to the console.
-            Calls the `complete` method with the user's session data to finalize the consent process.
         """
         print(
             f"Quiz completed with {current_quiz_question} out of {total_quiz_questions} questions"
@@ -266,20 +188,7 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
         """
         Asynchronously fetches the question, answer, and question ID for the specified question number
         from the user's current quiz session data.
-        Args:
-            current_question_number (int): The index of the question to fetch from the quiz pack.
-        Returns:
-            Dict: A dictionary containing the fetched 'question', 'answer', and 'question_id'.
-                  If the question cannot be fetched, returns a dictionary with empty string values.
-        Side Effects:
-            - Updates the session's current question and answer data.
-            - Increments the session's current question index.
-            - Logs information and errors related to the fetching process.
-        Exceptions:
-            - Catches and logs any exceptions that occur during the fetching process, returning
-              an empty tool_output dictionary in such cases.
         """
-
         tool_output = dict(question="", answer="", question_id="", error_message="")
         session_data: QuizTaskData = self.session.userdata
         logger.info(
@@ -323,41 +232,6 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
             return tool_output
 
     def get_instructions(self) -> str:
-        # return f"""
-        # Do not greet or wish the student (it is already done earlier).
-        # You need to always be in control of the conversation, so initiate and continue conversation.
-
-        # SPEAKING RULES:
-        # - Always respond in plain English only — no markdown, symbols, code, or JSON.
-        # - Speak naturally and kindly, like a patient teacher. Never robotic.
-        # - Never mention or describe tools, functions, or system actions out loud.
-        # - Never hallucinate or invent questions.
-        # - Never give away the answers to any question.
-        # - Only pause when waiting for the student’s spoken answer to quiz question.
-
-        # VOICE MODE: no symbols, no formatting, just natural English.
-
-        # CONTEXT:
-        # - Date/Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        # - Student Name: {self.student_name}
-        # - Subject: {self.subject}
-        # - Current Question Number: {self.get_data().current_q_index}
-        # - Total Questions: {self.get_data().total_qna}
-        # - Current Question Details: {self.get_data().current_question_and_answer}
-        # - Remaining Questions: {self.get_data().total_qna - self.get_data().current_q_index}
-
-        # INSTRUCTIONS (background, not spoken):
-        # - Always inform student before the question about which question number he/she is answering.
-        # - To ask a question, always CALL `fetch_qna`. Never invent questions.
-        # - To evaluate the student’s answer, CALL `evaluation_tool` with the correct parameters.
-        # - After evaluation, do not wait for another student response — continue naturally.
-        # - To check if the quiz is complete, CALL `is_quiz_completed`.
-        # - If quiz is complete, CALL `quiz_completed`, congratulate the student warmly, and tell them the session is over.
-        # - Use encouraging words like: Excellent, Good Job, Great, Nice one, You're doing great, Very Good, Cool, No problem, let me explain, Good try, Could have been better.
-        # - All system actions (fetching, evaluating, checking, marking completion) must happen silently in the background. Only spoken output should sound like a kind teacher guiding the student.
-
-        # """
-
         return f"""
             Your role is to conduct a spoken quiz with descriptive questions.
             Do not greet or wish the student, it is already done earlier.
@@ -365,7 +239,7 @@ class QuizTaskEngine(AgentTask[QuizTaskData]):
             Generate response in plain english only — no markdown, symbols, code, or JSON.
             Be natural and kind, like a patient teacher. Never robotic.
             Do not mention tools, functions, or internal steps. Do not hallucinate.
-            Only pause when waiting for the student’s response.
+            Only pause when waiting for the student's response.
             Your role is only guide and mentor so never ever give away any answers to the student.
 
             VOICE MODE: No symbols. No formatting. Just plain spoken English.

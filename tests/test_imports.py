@@ -27,7 +27,9 @@ def test_imports():
     from src.utils.open_telemtry import configure_opentelemetry
     
     # Test main modules
-    from src import tutor_agent, run_quiz_agent, main
+    from src import main
+    from src.agents import tutor_agent
+    from src.quiz import quiz_engine
     
     # If we get here without exceptions, all imports work
     assert True
