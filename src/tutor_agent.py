@@ -1,7 +1,6 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-import json
 from typing import Annotated, AsyncIterable
 from livekit.agents import (
     Agent,
@@ -12,7 +11,6 @@ from livekit.agents import (
 from collections.abc import AsyncIterable, Coroutine
 from livekit.agents.llm import RawFunctionTool, FunctionTool
 from livekit.agents.llm.llm import ChatChunk
-from livekit.agents.voice.io import TimedString
 import pandas as pd
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.api import DeleteRoomRequest
@@ -21,7 +19,6 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import (
     Agent,
     AgentSession,
-    ConversationItemAddedEvent,
     AutoSubscribe,
     get_job_context,
     JobContext,
@@ -31,7 +28,7 @@ from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, List
-from livekit.agents import function_tool, metrics, MetricsCollectedEvent
+from livekit.agents import function_tool, metrics
 from livekit.agents.llm import FunctionTool, RawFunctionTool
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.agents.llm.llm import ChatChunk
@@ -56,7 +53,7 @@ from src.run_quiz_agent import (
     large_language_model,
 )
 from src.config.logging_config import logger
-from src.models.agent_dtos import ChatTranscript, UsageMetrics
+from src.models.agent_dtos import UsageMetrics
 from src.database.supabase_client import get_db_client
 
 NO_STUDENT_NAME = "Student name is Missing. Required"
@@ -69,6 +66,7 @@ class MainAgentData:
     student_name: str = NO_STUDENT_NAME
     subject: str = NO_SUBJECT
     user_name: str = NO_USER_NAME
+    session_id: str = "None"
 
 
 # ---------- AGENT ----------
@@ -111,31 +109,15 @@ class TutorVoiceAgent(Agent):
         | Coroutine[Any, Any, ChatChunk]
         | Coroutine[Any, Any, None]
     ):
-        # logger.info(f"Current Message : {chat_ctx.items[-1]}")
         chat_ctx.truncate(max_items=10)
         return super().llm_node(chat_ctx, tools, model_settings)
 
-    def on_conversation_item_added(self, event: ConversationItemAddedEvent):
-        if event is None or event.item is None:
-            return
-        message = f"{event.item.role}: {event.item.content.pop()}"
-        asyncio.create_task(get_job_context().agent.send_text(message, topic="lk.chat"))
-        logger.info(f"{message}")
-
     async def on_enter(self) -> None:
-        self.session.on("conversation_item_added", self.on_conversation_item_added)
-        self.session.userdata.user_name = list(
-            get_job_context().room.remote_participants.values()
-        )[0].identity
-        logger.info(
-            f"Room Started : {get_job_context().room.name} with Participant : {self.session.userdata.user_name}"
-        )
         logger.info(f"Entered session with Session Data : {self.session.userdata}")
         await self.session.generate_reply(
             instructions="Start conversation by saying `Hi` or `Hello` and then continue the conversation",
             allow_interruptions=False,
         )
-        # await self.session.say("Hi there! How are you?")
 
     async def on_user_turn_completed(
         self, turn_ctx: ChatContext, new_message: ChatMessage
@@ -144,6 +126,9 @@ class TutorVoiceAgent(Agent):
 
     @function_tool
     async def end_the_call(self, message: str) -> None:
+        self.session.say(
+            "Good bye! This call will now get disconnected", allow_interruptions=False
+        )
         job_ctx = get_job_context()
         job_ctx.shutdown()
         await job_ctx.api.room.delete_room(DeleteRoomRequest(room=job_ctx.room.name))
@@ -229,7 +214,7 @@ class TutorVoiceAgent(Agent):
             # Convert the Series to a dictionary
             results_summary = value_counts.to_dict()
         else:
-            results_summary = "Looks like quiz data is having some issues"
+            results_summary = "Looks like we're having some issues"
         print(f"Results summary : {results_summary}")
         await self.session.generate_reply(
             instructions=f"Inform the student politely that quiz is completed and share their results : {results_summary} and then end the call",
@@ -270,37 +255,60 @@ class TutorVoiceAgent(Agent):
         """
 
 
+async def log_usage(
+    session_id: str, user_name: str, usage_collector: metrics.UsageCollector
+) -> None:
+    summary = usage_collector.get_summary()
+    metrics = UsageMetrics(
+        session_id=session_id,
+        user_name=user_name,
+        mt_llm_completiontokens=summary.llm_completion_tokens,
+        mt_llm_prompttokens=summary.llm_prompt_tokens,
+        mt_llm_promptcachetokens=summary.llm_prompt_cached_tokens,
+        mt_stt_audioduration=summary.stt_audio_duration,
+        mt_tts_audioduration=summary.tts_audio_duration,
+        mt_tts_characterscount=summary.tts_characters_count,
+    )
+    if get_db_client().update_usage_metrics_in_db(metrics):
+        logger.info(f"Usage Metrics Stored for user : {user_name}")
+        return
+
+    logger.error(f"Unable to store metrics for user : {user_name}")
+
+
 # ---------- ENTRYPOINT ----------
 async def agent_entrypoint(ctx: JobContext):
     configure_opentelemetry()
     usage_collector = metrics.UsageCollector()
 
+    user_name = list(ctx.room.remote_participants.values())[0].identity
+    session_id = ctx.job.id
+
     logger.info(f"AGENT STARTING WITH ROOM : {ctx.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    session = AgentSession(userdata=MainAgentData())
+    session = AgentSession(userdata=MainAgentData(session_id=ctx.job.id))
 
     @session.on("metrics_collected")
     def _on_metrics_collected(event: agents.MetricsCollectedEvent):
         usage_collector.collect(event.metrics)
 
-    async def log_usage():
-        summary = usage_collector.get_summary()
-        metrics = UsageMetrics(
-            session_id="",
-            user_name=session.userdata.user_name,
-            mt_llm_completiontokens=summary.llm_completion_tokens,
-            mt_llm_prompttokens=summary.llm_prompt_tokens,
-            mt_llm_promptcachetokens=summary.llm_prompt_cached_tokens,
-            mt_stt_audioduration=summary.stt_audio_duration,
-            mt_tts_audioduration=summary.tts_audio_duration,
-            mt_tts_characterscount=summary.tts_characters_count,
+    @session.on("conversation_item_added")
+    def _on_conversation_item_added(event: agents.ConversationItemAddedEvent):
+        if event is None or event.item is None:
+            return
+        message = f"{event.item.role}: {event.item.content.pop()}"
+        asyncio.create_task(
+            get_job_context().agent.send_text(message, topic=f"{user_name}.chat")
         )
-        if get_db_client().update_usage_metrics_in_db(metrics):
-            logger.info(f"Usage Metrics Stored for user : {session.userdata.user_name}")
+        logger.info(f"{message}")
 
-        logger.error(f"Unable to store metrics for user : {session.userdata.user_name}")
-
-    ctx.add_shutdown_callback(log_usage)
+    ctx.add_shutdown_callback(
+        lambda: log_usage(
+            session_id=session_id,
+            user_name=user_name,
+            usage_collector=usage_collector,
+        )
+    )
     await session.start(
         agent=TutorVoiceAgent(
             ctx=ctx,
