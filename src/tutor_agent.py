@@ -281,9 +281,6 @@ async def agent_entrypoint(ctx: JobContext):
     configure_opentelemetry()
     usage_collector = metrics.UsageCollector()
 
-    user_name = list(ctx.room.remote_participants.values())[0].identity
-    session_id = ctx.job.id
-
     logger.info(f"AGENT STARTING WITH ROOM : {ctx.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
     session = AgentSession(userdata=MainAgentData(session_id=ctx.job.id))
@@ -302,13 +299,6 @@ async def agent_entrypoint(ctx: JobContext):
         )
         logger.info(f"{message}")
 
-    ctx.add_shutdown_callback(
-        lambda: log_usage(
-            session_id=session_id,
-            user_name=user_name,
-            usage_collector=usage_collector,
-        )
-    )
     await session.start(
         agent=TutorVoiceAgent(
             ctx=ctx,
@@ -324,6 +314,14 @@ async def agent_entrypoint(ctx: JobContext):
             pre_connect_audio=True,
             noise_cancellation=noise_cancellation.BVC(),
         ),
+    )
+    user_name = list(ctx.room.remote_participants.values())[0].identity
+    ctx.add_shutdown_callback(
+        lambda: log_usage(
+            session_id=ctx.job.id,
+            user_name=user_name,
+            usage_collector=usage_collector,
+        )
     )
 
 

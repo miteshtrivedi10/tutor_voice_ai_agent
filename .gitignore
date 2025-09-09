@@ -14,7 +14,8 @@ downloaded_models
 logs
 ignore_this_folder
 KMS
-
+.roo
+.env*
 
 # Distribution / packaging
 .Python
