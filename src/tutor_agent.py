@@ -103,6 +103,9 @@ class TutorVoiceAgent(Agent):
         self.session.userdata.total_session_duration = int(
             (datetime.now() - self.session.userdata.session_start_time).total_seconds()
         )
+        logger.info(
+            f"Total seconds generated : {self.session.userdata.total_session_duration}"
+        )
 
     def llm_node(
         self,
@@ -121,6 +124,7 @@ class TutorVoiceAgent(Agent):
 
     async def on_enter(self) -> None:
         logger.info(f"Entered session with Session Data : {self.session.userdata}")
+        self.session.userdata.session_start_time = datetime.now()
         await self.session.generate_reply(
             instructions="Start conversation by saying `Hi` or `Hello` and then continue the conversation",
             allow_interruptions=False,
