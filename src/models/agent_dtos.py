@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Literal
 from pydantic import BaseModel
 import re
@@ -38,6 +39,7 @@ class QuizPackAssessment(BaseModel):
 class UsageMetrics(BaseModel):
     session_id: str = "Not Set"
     user_name: str = "Not Set"
+    mt_total_session_duration: int = 0
     mt_stt_audioduration: float = 0.0
     mt_llm_duration: int = 0
     mt_llm_completiontokens: int = 0

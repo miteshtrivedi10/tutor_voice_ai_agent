@@ -47,16 +47,16 @@ speech_to_text = sarvam.STT(
     language="en-IN",
 )
 
-# text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-thalia-en")
+text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-thalia-en")
 
-text_to_speech = sarvam.TTS(
-    model="bulbul:v2",
-    target_language_code="en-IN",
-    speaker="karun",
-    # pitch=0.7,
-    # pace=0.7,
-    enable_preprocessing=True,
-)
+# text_to_speech = sarvam.TTS(
+#     model="bulbul:v2",
+#     target_language_code="en-IN",
+#     speaker="karun",
+#     # pitch=0.7,
+#     # pace=0.7,
+#     enable_preprocessing=True,
+# )
 
 large_language_model = groq.LLM(
     model="moonshotai/kimi-k2-instruct",

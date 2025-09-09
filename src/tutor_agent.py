@@ -67,6 +67,8 @@ class MainAgentData:
     subject: str = NO_SUBJECT
     user_name: str = NO_USER_NAME
     session_id: str = "None"
+    session_start_time: datetime = datetime.now()
+    total_session_duration: int = 0
 
 
 # ---------- AGENT ----------
@@ -95,6 +97,11 @@ class TutorVoiceAgent(Agent):
             llm=llm,
             vad=silero.VAD.load(),
             turn_detection=MultilingualModel(),
+        )
+
+    async def on_exit(self) -> None:
+        self.session.userdata.total_session_duration = int(
+            (datetime.now() - self.session.userdata.session_start_time).total_seconds()
         )
 
     def llm_node(
@@ -256,12 +263,16 @@ class TutorVoiceAgent(Agent):
 
 
 async def log_usage(
-    session_id: str, user_name: str, usage_collector: metrics.UsageCollector
+    session_id: str,
+    user_name: str,
+    total_session_duration: int,
+    usage_collector: metrics.UsageCollector,
 ) -> None:
     summary = usage_collector.get_summary()
     metrics = UsageMetrics(
         session_id=session_id,
         user_name=user_name,
+        mt_total_session_duration=total_session_duration,
         mt_llm_completiontokens=summary.llm_completion_tokens,
         mt_llm_prompttokens=summary.llm_prompt_tokens,
         mt_llm_promptcachetokens=summary.llm_prompt_cached_tokens,
@@ -320,6 +331,7 @@ async def agent_entrypoint(ctx: JobContext):
         lambda: log_usage(
             session_id=ctx.job.id,
             user_name=user_name,
+            total_session_duration=session.userdata.total_session_duration,
             usage_collector=usage_collector,
         )
     )
