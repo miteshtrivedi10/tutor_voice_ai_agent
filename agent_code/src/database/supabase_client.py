@@ -3,9 +3,9 @@ Supabase client module for fetching Q&A data
 """
 
 from supabase import create_client, Client
-from src.config.settings import SUPABASE_URL, SUPABASE_KEY
-from src.config.logging_config import logger
-from src.models.agent_dtos import QuizPackFromDb, QnAFromDb, UsageMetrics
+from ..config.settings import SUPABASE_URL, SUPABASE_KEY
+from ..config.logging_config import logger
+from ..models.agent_dtos import QuizPackFromDb, QnAFromDb, UsageMetrics
 from qa_metrics.pedant import PEDANT
 
 

@@ -23,7 +23,7 @@ from livekit.agents import (
     get_job_context,
     JobContext,
 )
-from src.utils.open_telemtry import configure_opentelemetry
+from utils.open_telemtry import configure_opentelemetry
 from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime
@@ -39,22 +39,21 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from src.config.logging_config import logger
-from livekit.agents import function_tool
+from agent_code.src.config.logging_config import logger
+from livekit.agents import function_tool, mcp
 from livekit.plugins import silero, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.api import DeleteRoomRequest
 from livekit import agents
-
-from src.run_quiz_agent import (
+from agent_code.src.run_quiz_agent import (
     QuizTaskEngine,
     speech_to_text,
     text_to_speech,
     large_language_model,
 )
-from src.config.logging_config import logger
-from src.models.agent_dtos import UsageMetrics
-from src.database.supabase_client import get_db_client
+from agent_code.src.config.logging_config import logger
+from agent_code.src.models.agent_dtos import UsageMetrics
+from agent_code.src.database.supabase_client import get_db_client
 
 NO_STUDENT_NAME = "Student name is Missing. Required"
 NO_SUBJECT = "Subject is missing. Required"
@@ -95,6 +94,7 @@ class TutorVoiceAgent(Agent):
             llm=llm,
             vad=silero.VAD.load(),
             turn_detection=MultilingualModel(),
+            mcp_servers=[mcp.MCPServerHTTP("http://localhost:8000/mcp")],
         )
 
     async def on_exit(self) -> None:
@@ -184,59 +184,11 @@ class TutorVoiceAgent(Agent):
         )
         return "Alright I've updated the subject"
 
-    @function_tool
-    async def start_quiz(self, message: str) -> str:
-        """
-        Initiates a quiz session for the student based on the provided message.
-        Args:
-            message (str): The input message triggering the quiz.
-        Returns:
-            str: A response message indicating the result of the quiz initiation or any validation errors.
-        Raises:
-            None
-        Notes:
-            - Validates the presence of a student name and subject in the session data.
-            - Calls the QuizTaskEngine asynchronously to retrieve quiz data.
-            - Returns a success message if all answers are correct, or an error message if validation fails.
-        """
-
-        stud_name = self.session.userdata.student_name
-        sub = self.session.userdata.subject
-
-        if stud_name == NO_STUDENT_NAME or stud_name == "":
-            return "Invalid student name. Update the session data with a valid and relevant name and then retry again"
-        if sub == NO_SUBJECT:
-            return "Invalid subject. Update the session data with a valid and relevant subject and then retry again"
-
-        user_name = "mitst"
-        print(f"Calling the Quiz Enginer with stud_name: {stud_name}, sub: {sub}")
-        quiz_data = await QuizTaskEngine(stud_name, sub, user_name)
-        print(f"Quiz Data Retrieved : {quiz_data.assessments}")
-        # Convert the list of dictionaries to a pandas DataFrame
-
-        if quiz_data and quiz_data.assessments:
-            # Create a list of all values from the dictionaries
-            values = [list(d.values())[0] for d in quiz_data.assessments]
-            # Create a pandas Series from the list of values and use value_counts()
-            value_counts = pd.Series(values).value_counts()
-
-            # Convert the Series to a dictionary
-            results_summary = value_counts.to_dict()
-        else:
-            results_summary = "Looks like we're having some issues"
-        print(f"Results summary : {results_summary}")
-        await self.session.generate_reply(
-            instructions=f"Inform the student politely that quiz is completed and share their results : {results_summary} and then end the call",
-            allow_interruptions=False,
-        )
-        await self.end_the_call("End the call")
-        return "You gave correct answers to all the questions"
-
     def get_instructions(self) -> str:
         print(f"Session Data : {self.get_data()}")
         return f"""
         You are Quizzy, a warm and patient voice tutor for kids aged 5 to 15.
-        Your role is to only gather required information from the student and start the quiz using relevant tools and functions.
+        Your role is to always gather required information from the student and start the quiz using relevant tools and functions.
         Always confirm name and subject before starting the quiz.
 
         SPEAKING RULES:
@@ -250,10 +202,20 @@ class TutorVoiceAgent(Agent):
         BACKGROUND RULES (never spoken):
         - All system actions happen silently in the background.
         - Do not output explanations of tools. Only produce structured tool calls.
+        
+        FLOW:
+        - Ask student name and remember it in session data.
+        - Ask student subject and remember it in session data.
+        - For starting the quiz, first you need to load the quiz questions
+        - Then start the quiz by asking first question and then ask for next question.
+        - Always evaluate student answers before moving to the next question
+        - Always check if quiz ended before moving to the next question
+        - At the end of the quiz, provide feedback to the student and end the call
 
         SESSION DATA:
         - Student Name: {self.get_data().student_name}
         - Subject: {self.get_data().subject}
+        - User Name: mitst
         - Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         """
 

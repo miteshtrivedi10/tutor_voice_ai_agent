@@ -5,8 +5,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.resources import Resource
 from livekit.agents.telemetry import set_tracer_provider
-from src.config.logging_config import logger
-from src.config.settings import (
+from ..config.logging_config import logger
+from ..config.settings import (
     LK_AGENT_OTEL_AUTH_CODE,
     LK_AGENT_OTEL_ENABLED,
     LK_AGENT_OTEL_EXPORTER_OTLP_ENDPOINT,
