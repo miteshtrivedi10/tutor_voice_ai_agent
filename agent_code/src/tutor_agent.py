@@ -79,9 +79,7 @@ class TutorVoiceAgent(Agent):
     def get_data(self) -> MainAgentData:
         if not hasattr(self, "session") or not hasattr(self.session, "userdata"):
             return MainAgentData()
-
-        session_data: MainAgentData = self.session.userdata
-        return session_data
+        return self.session.userdata
 
     @property
     def lable(self) -> str:
@@ -119,7 +117,7 @@ class TutorVoiceAgent(Agent):
         | Coroutine[Any, Any, ChatChunk]
         | Coroutine[Any, Any, None]
     ):
-        chat_ctx.truncate(max_items=10)
+        chat_ctx.truncate(max_items=20)
         return super().llm_node(chat_ctx, tools, model_settings)
 
     async def on_enter(self) -> None:
@@ -238,7 +236,8 @@ class TutorVoiceAgent(Agent):
         print(f"Session Data : {self.get_data()}")
         return f"""
         You are Quizzy, a warm and patient voice tutor for kids aged 5 to 15.
-        Your role is to only gather required information from the student and start the quiz.
+        Your role is to only gather required information from the student and start the quiz using relevant tools and functions.
+        Always confirm name and subject before starting the quiz.
 
         SPEAKING RULES:
         - Always greet the student warmly, encourage them and speak in plain spoken text that a child can understand.
@@ -256,13 +255,6 @@ class TutorVoiceAgent(Agent):
         - Student Name: {self.get_data().student_name}
         - Subject: {self.get_data().subject}
         - Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-        INSTRUCTIONS:
-        - If student name is missing or outdated → CALL `update_student_name`.
-        - If subject is missing or outdated → CALL `update_subject`.
-        - Once student name and subject are set → CALL `start_quiz`.
-        - If `start_quiz` fails twice → politely tell the student there was a problem and end the session.
-        - End the quiz session -> CALL `end_the_call`.
         """
 
 
@@ -298,7 +290,13 @@ async def agent_entrypoint(ctx: JobContext):
 
     logger.info(f"AGENT STARTING WITH ROOM : {ctx.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    session = AgentSession(userdata=MainAgentData(session_id=ctx.job.id))
+    session = AgentSession(
+        userdata=MainAgentData(
+            session_id=ctx.job.id,
+            total_session_duration=0,
+            session_start_time=datetime.now(),
+        )
+    )
 
     @session.on("metrics_collected")
     def _on_metrics_collected(event: agents.MetricsCollectedEvent):
