@@ -1,5 +1,5 @@
 from sentence_transformers import SentenceTransformer, util
-
+from src.config.logging import logger
 # Load a pre-trained model for sentence embeddings
 # 'all-MiniLM-L6-v2' is a good choice for speed and quality.
 model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -16,6 +16,8 @@ def get_semantic_similarity(correct_answer: str, student_answer: str) -> str:
     similarity = util.pytorch_cos_sim(embeddings[0], embeddings[1])
 
     scored_item = similarity.item()
+
+    logger.info(f"Semantic similarity score: {scored_item}")
 
     if scored_item > 0.8:
         return "CORRECT"

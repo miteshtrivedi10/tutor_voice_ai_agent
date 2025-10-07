@@ -2,6 +2,7 @@ from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List
+import uuid
 from dotenv import load_dotenv
 from livekit.agents import AgentTask, function_tool
 from livekit.agents.llm import FunctionTool, RawFunctionTool
@@ -47,7 +48,7 @@ speech_to_text = sarvam.STT(
     language="en-IN",
 )
 
-text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-thalia-en")
+text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-andromeda-en")
 
 # text_to_speech = sarvam.TTS(
 #     model="bulbul:v2",
@@ -59,10 +60,13 @@ text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-thalia-en")
 # )
 
 large_language_model = groq.LLM(
-    model="moonshotai/kimi-k2-instruct",
-    temperature=0.3,
+    model="moonshotai/kimi-k2-instruct-0905",
+    temperature=0.5,
     tool_choice="auto",
-    top_p=0.8,
+    parallel_tool_calls=True,
+    max_retries=3,
+    user=uuid.uuid4().hex,
+    top_p=0.75,
 )
 
 # large_language_model = openai.LLM.with_ollama(
@@ -74,12 +78,12 @@ large_language_model = groq.LLM(
 # )
 
 # large_language_model = openai.LLM(
-#     model="meta-llama/llama-3.3-70b-instruct:free",
+#     model="meta-llama/llama-3.3-8b-instruct:free",
 #     api_key="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",
 #     base_url="https://openrouter.ai/api/v1",
 #     temperature=0.4,
-#     top_p=0.7,
-#     reasoning_effort="low",
+#     top_p=0.75,
+#     reasoning_effort="medium",
 #     tool_choice="auto",
 # )
 

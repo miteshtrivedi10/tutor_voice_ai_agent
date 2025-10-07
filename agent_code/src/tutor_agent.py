@@ -22,8 +22,9 @@ from livekit.agents import (
     AutoSubscribe,
     get_job_context,
     JobContext,
+    RunContext,
 )
-from utils.open_telemtry import configure_opentelemetry
+from .utils.open_telemtry import configure_opentelemetry
 from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass
 from datetime import datetime
@@ -39,25 +40,25 @@ from livekit.plugins import (
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-from agent_code.src.config.logging_config import logger
+from .config.logging_config import logger
 from livekit.agents import function_tool, mcp
 from livekit.plugins import silero, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.api import DeleteRoomRequest
 from livekit import agents
-from agent_code.src.run_quiz_agent import (
+from .run_quiz_agent import (
     QuizTaskEngine,
     speech_to_text,
     text_to_speech,
     large_language_model,
 )
-from agent_code.src.config.logging_config import logger
-from agent_code.src.models.agent_dtos import UsageMetrics
-from agent_code.src.database.supabase_client import get_db_client
+from .config.logging_config import logger
+from .models.agent_dtos import UsageMetrics
+from .database.supabase_client import get_db_client
 
-NO_STUDENT_NAME = "Student name is Missing. Required"
-NO_SUBJECT = "Subject is missing. Required"
-NO_USER_NAME = "User name is missing. Required"
+NO_STUDENT_NAME = "Student name not provided. It is mandatory to have a name"
+NO_SUBJECT = "Subject not provided. It is mandatory to have a subject"
+NO_USER_NAME = "User Id not provided. It is mandatory to have a user id"
 
 
 @dataclass
@@ -77,12 +78,11 @@ class TutorVoiceAgent(Agent):
 
     def get_data(self) -> MainAgentData:
         if not hasattr(self, "session") or not hasattr(self.session, "userdata"):
+            logger.warning(
+                "Session or userdata not found, returning default MainAgentData"
+            )
             return MainAgentData()
         return self.session.userdata
-
-    @property
-    def lable(self) -> str:
-        return "Quizzy Tutor"
 
     def __init__(self, ctx, stt, tts, llm):
         self.metrics_keeper = metrics.UsageCollector()
@@ -117,16 +117,12 @@ class TutorVoiceAgent(Agent):
         | Coroutine[Any, Any, ChatChunk]
         | Coroutine[Any, Any, None]
     ):
-        chat_ctx.truncate(max_items=20)
+        chat_ctx.truncate(max_items=10)
         return super().llm_node(chat_ctx, tools, model_settings)
 
     async def on_enter(self) -> None:
         logger.info(f"Entered session with Session Data : {self.session.userdata}")
         self.session.userdata.session_start_time = datetime.now()
-        await self.session.generate_reply(
-            instructions="Start conversation by saying `Hi` or `Hello` and then continue the conversation",
-            allow_interruptions=False,
-        )
 
     async def on_user_turn_completed(
         self, turn_ctx: ChatContext, new_message: ChatMessage
@@ -134,8 +130,8 @@ class TutorVoiceAgent(Agent):
         await super().update_instructions(self.get_instructions())
 
     @function_tool
-    async def end_the_call(self, message: str) -> None:
-        self.session.say(
+    async def end_the_call(self, run_context: RunContext) -> None:
+        await self.session.say(
             "Good bye! This call will now get disconnected", allow_interruptions=False
         )
         job_ctx = get_job_context()
@@ -144,80 +140,110 @@ class TutorVoiceAgent(Agent):
 
     @function_tool
     async def update_student_name(
-        self, student_name: Annotated[str, "The student's name"]
+        self,
+        run_context: RunContext,
+        student_name: str,
     ) -> str:
         """
         Updates the student's name in the current session's user data.
         Args:
             context (RunContext): The current execution context.
-            student_name (str): The new name to assign to the student.
+            student_name (str): Student's name to be updated.
         Returns:
-            None
+            str
         """
         # if student_name is None or student_name.lower() == "student":
-        self.session.userdata.student_name = student_name
         logger.info(
             f"Updating student name to: {student_name} : currently : {self.session.userdata.student_name}"
         )
+        self.session.userdata.student_name = student_name
         return "Alright I've updated the name"
 
     @function_tool
     async def update_subject(
-        self, subject: Annotated[str, "Student's chosen subject"]
+        self,
+        run_context: RunContext,
+        subject: str,
     ) -> str:
         """
         Updates the subject for the current student session.
-
         Args:
             subject (str): Student's chosen subject.
-
         Returns:
-            None
-
-        Notes:
-            If the student's name is not set or is "student", the update is skipped.
-            Updates the session's student_name and logs the change.
+            str
         """
-        self.session.userdata.subject = subject
         logger.info(
             f"Updating subject to: {subject} : currently : {self.session.userdata.subject}"
         )
+        self.session.userdata.subject = subject
         return "Alright I've updated the subject"
 
     def get_instructions(self) -> str:
         print(f"Session Data : {self.get_data()}")
         return f"""
-        You are Quizzy, a warm and patient voice tutor for kids aged 5 to 15.
-        Your role is to always gather required information from the student and start the quiz using relevant tools and functions.
-        Always confirm name and subject before starting the quiz.
+        [Role]
+        You are Quizzy, an AI based quiz master. Your primary goal is to conduct the voice enabled quiz from given syllabus for students in a very realistic and natural manner.
 
-        SPEAKING RULES:
-        - Always greet the student warmly, encourage them and speak in plain spoken text that a child can understand.
-        - Never mention tools, functions, code, JSON, or system details out loud.
-        - Never describe or read function calls.
-        - Sound natural, like a kind teacher: friendly, supportive, never robotic.
-        - Voice mode: no symbols, no formatting, just natural English.
-        - Valid subjects are only Science, English, Geography. Always ask student to choose a valid subject.
+        [Context]
+        You are conducting voice or audio based quiz for student, so always stay focused on this context. Once student is connected, proceed to conversational flow section. Do not invent or ask
+        out of syllabus questions (which are not relevant)
 
-        BACKGROUND RULES (never spoken):
-        - All system actions happen silently in the background.
-        - Do not output explanations of tools. Only produce structured tool calls.
-        
-        FLOW:
-        - Ask student name and remember it in session data.
-        - Ask student subject and remember it in session data.
-        - For starting the quiz, first you need to load the quiz questions
-        - Then start the quiz by asking first question and then ask for next question.
-        - Always evaluate student answers before moving to the next question
-        - Always check if quiz ended before moving to the next question
-        - At the end of the quiz, provide feedback to the student and end the call
+        [Response Handling]
+        When asking questions from the 'Conversation Flow' section, evaluate the customer's response to determine if it qualifies as a valid answer. Use context awareness to assess relevance and appropriateness. If the response is valid, proceed to the next relevant question or instructions. Avoid infinite loops by moving forward when a clear answer cannot be obtained.
 
-        SESSION DATA:
+        [Warning]
+        Do not modify or attempt to correct user input parameters or user input, Pass them directly into the function or tool as given.
+
+        [Rules]
+        - Keep responses brief
+        - Remember this is voice based communication, so do not speak up any symbols or markdown formatting.
+        - Never repeat yourself unless absolutely necessary.
+        - Be very informal and friendly in your tone, never be robotic. Always address the student by their name [Refer Session Data section]
+        - Do not wait for the student response if you decide to call the tools or functions
+        - Ask one question at a time, but combine related questions where appropriate.
+        - Maintain a calm, empathetic, and professional tone.
+        - Never say the word 'function' nor 'tools' nor the name of the Available functions.
+
+        [Error Handling]
+        - If the student's response is unclear, ask the student to repeat their answer. If you encounter any issues, inform the student politely and ask to repeat.
+        - If there is any issue with the tools or functions, apologize to the student and inform them that you are facing technical issues and will try again.
+
+        [Conversation Flow]
+        1. Greet the student politely based on the time of day (available in session data section) and be welcoming
+        2. Ask for student's name.
+            - if response is not relevant or invalid then repeat step 2.
+            - if unable to save the name due to technical issues, apologize and inform the student that you are facing technical issues and will try again.
+            - if response is valid and relevant then save the name using update_student_name
+        3. Fetch the relevant and valid subjects using get_valid_subjects_to_choose_from
+        4. Ask for student's choice of subject and inform to choose from the valid subjects fetched in step 3.
+            - if response is invalid or not relevant then repeat step 4
+            - if unable to save the subject due to technical issues, apologize and inform the student that you are facing technical issues and will try again.
+            - if response is valid then save the subject using update_subject
+        5. Inform user that you are now preparing the quiz questions and it will take a few seconds, do not wait for any response and move to next step.
+        6. Start the quiz immediately using start_quiz (provided there are valid student name and subject in session data)
+            - Never ask any made up questions
+        7. Get quiz questions only using get_quiz_question (never hallucinate over quiz questions) and ask them to the student one by one
+            - If the student is unable to answer then provide one hint (based on actual answer) and then wait for their answer
+            - Wait for student's relevant answer to the quiz question and then evaluate it using evaluate_student_answer
+            - Based on evaluation result, guide the student to correct answer
+            - If student takes longer time to respond, then politely remind them to answer the question.
+        8. Always check after each question if the quiz is completed use is_quiz_completed
+            - If quiz is not completed then continue to step 7
+            - If quiz is completed then move to Last Message section
+
+        [Last Message]
+        - If the quiz is completed then politely inform student you're ending the call
+        - Proceed to the Call Closing section.
+
+        [Call Closing]
+        - use end_the_call to stop the session
+                
+        [Session Data]
         - Student Name: {self.get_data().student_name}
         - Subject: {self.get_data().subject}
-        - User Name: mitst
-        - Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-        """
+        - User Id: {self.get_data().user_name}
+        - Current Time: {self.get_data().session_start_time}
+        """.strip()
 
 
 async def log_usage(
@@ -257,7 +283,8 @@ async def agent_entrypoint(ctx: JobContext):
             session_id=ctx.job.id,
             total_session_duration=0,
             session_start_time=datetime.now(),
-        )
+        ),
+        max_tool_steps=10,
     )
 
     @session.on("metrics_collected")
@@ -291,6 +318,7 @@ async def agent_entrypoint(ctx: JobContext):
         ),
     )
     user_name = list(ctx.room.remote_participants.values())[0].identity
+    session.userdata.user_name = user_name
     ctx.add_shutdown_callback(
         lambda: log_usage(
             session_id=ctx.job.id,

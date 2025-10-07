@@ -11,6 +11,7 @@ __pycache__/
 .env
 .serena
 downloaded_models
+.idea
 logs
 ignore_this_folder
 KMS

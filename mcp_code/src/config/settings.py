@@ -19,7 +19,7 @@ class Config:
     
     # Cache configuration
     CACHE_MAXSIZE: int = int(os.getenv("CACHE_MAXSIZE", "1000"))
-    CACHE_TTL: int = int(os.getenv("CACHE_TTL", "900"))  # 15 minutes
+    CACHE_TTL: int = int(os.getenv("CACHE_TTL", "21600"))  # 15 minutes
     
     # Server configuration
     SERVER_HOST: str = os.getenv("SERVER_HOST", "0.0.0.0")

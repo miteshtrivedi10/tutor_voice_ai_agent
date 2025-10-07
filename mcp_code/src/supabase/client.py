@@ -3,7 +3,7 @@ Supabase client module for the MCP Server
 Handles Supabase database connections and queries
 """
 
-from typing import List, Optional
+from typing import List, Set, Optional
 from supabase import create_client, Client
 from src.config.settings import Config
 from src.models.question import Question
@@ -30,6 +30,43 @@ class SupabaseClient:
             except Exception as e:
                 logger.error(f"Failed to initialize Supabase client: {e}")
                 raise
+
+    def load_all_unique_user_names(self) -> Set[str]:
+        """
+        Load all unique user names from the database
+
+        Returns:
+            Set of unique user names
+        """
+        try:
+            # Ensure client is initialized
+            self._initialize_client()
+            
+            response = (
+                self.client.table("question_and_answers")
+                .select("user_name")
+                .execute()
+            )
+
+            # Handle case where response.data might be None or empty
+            if not response.data:
+                logger.info("No user names found in database")
+                return set()
+
+            # Extract user names and remove duplicates using set
+            user_names = set()
+            for record in response.data:
+                user_name = record.get("user_name")
+                if user_name:
+                    user_names.add(user_name)
+                    
+            logger.info(f"Loaded {len(user_names)} unique user names")
+            return user_names
+
+        except Exception as e:
+            logger.error(f"Error loading user names: {str(e)}")
+            # Return empty set instead of raising exception to prevent server startup failure
+            return set()
 
     def load_questions(
         self, user_name: str, subject: str, question_limit: int
