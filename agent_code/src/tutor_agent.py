@@ -324,7 +324,7 @@ async def agent_entrypoint(ctx: JobContext):
         userdata=MainAgentData(
             session_id=ctx.job.id,
             total_session_duration=0,
-            user_name="mitst",
+            # user_name="mitst",
             session_start_time=datetime.now(),
         ),
         user_away_timeout=10,
@@ -378,7 +378,7 @@ async def agent_entrypoint(ctx: JobContext):
             state_handler.inactivity_task.cancel()
 
     user_name = list(ctx.room.remote_participants.values())[0].identity
-    # session.userdata.user_name = user_name
+    session.userdata.user_name = user_name
     ctx.add_shutdown_callback(
         lambda: log_usage(
             session_id=ctx.job.id,
