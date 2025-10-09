@@ -97,6 +97,27 @@ class TutorVoiceAgent(Agent):
             mcp_servers=[mcp.MCPServerHTTP("http://localhost:8000/mcp")],
         )
 
+    async def user_presence_task(self):
+        # try to ping the user 2 times, if we get no answer, close the session
+        for _ in range(2):
+            await self.session.generate_reply(
+                instructions=(
+                    "The user has been inactive. Politely check if the user is still present."
+                )
+            )
+            await asyncio.sleep(5)
+        await self.end_the_call()
+
+    def user_state_changed(self, ev: agents.UserStateChangedEvent):
+        logger.info(f"User state changed: {ev.old_state} -> {ev.new_state}")
+        if ev.new_state == "away":
+            self.inactivity_task = asyncio.create_task(self.user_presence_task())
+            return
+
+        # ev.new_state: listening, speaking, ..
+        if self.inactivity_task is not None:
+            self.inactivity_task.cancel()
+
     async def on_exit(self) -> None:
         self.session.userdata.total_session_duration = int(
             (datetime.now() - self.session.userdata.session_start_time).total_seconds()
@@ -246,6 +267,26 @@ class TutorVoiceAgent(Agent):
         """.strip()
 
 
+class UserStateHandler:
+    inactivity_task: asyncio.Task | None = None
+
+    def __init__(self, session: AgentSession):
+        self.session = session
+
+    async def user_presence_task(self):
+        # try to ping the user 2 times, if we get no answer, close the session
+        logger.info("User is away, starting presence check task")
+        i = 0
+        for i in range(3):
+            logger.info(f"Pinging user, attempt {i}")
+            await self.session.say("I haven't heard from you, are you still there?")
+            await asyncio.sleep(5)
+            i = i + 1
+
+        if i >= 3:
+            await self.session.aclose()
+
+
 async def log_usage(
     session_id: str,
     user_name: str,
@@ -277,15 +318,20 @@ async def agent_entrypoint(ctx: JobContext):
     usage_collector = metrics.UsageCollector()
 
     logger.info(f"AGENT STARTING WITH ROOM : {ctx.room.name}")
+
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
     session = AgentSession(
         userdata=MainAgentData(
             session_id=ctx.job.id,
             total_session_duration=0,
+            user_name="mitst",
             session_start_time=datetime.now(),
         ),
+        user_away_timeout=10,
         max_tool_steps=10,
     )
+
+    state_handler = UserStateHandler(session)
 
     @session.on("metrics_collected")
     def _on_metrics_collected(event: agents.MetricsCollectedEvent):
@@ -317,8 +363,22 @@ async def agent_entrypoint(ctx: JobContext):
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
+
+    @session.on("user_state_changed")
+    def _on_user_state_changed(ev: agents.UserStateChangedEvent):
+        logger.info(f"User state changed: {ev.old_state} -> {ev.new_state}")
+        if ev.new_state == "away":
+            state_handler.inactivity_task = asyncio.create_task(
+                state_handler.user_presence_task()
+            )
+            return
+
+        # ev.new_state: listening, speaking, ..
+        if state_handler.inactivity_task is not None:
+            state_handler.inactivity_task.cancel()
+
     user_name = list(ctx.room.remote_participants.values())[0].identity
-    session.userdata.user_name = user_name
+    # session.userdata.user_name = user_name
     ctx.add_shutdown_callback(
         lambda: log_usage(
             session_id=ctx.job.id,

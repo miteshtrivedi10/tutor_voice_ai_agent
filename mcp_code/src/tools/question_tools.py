@@ -241,15 +241,17 @@ def evaluate_student_answer(
             if isinstance(q, Question) and q.question == question:
                 # Calculate semantic similarity between the student's answer and the correct answer
                 similarity_score = get_semantic_similarity(q.answer, student_answer)
+                logger.info(f"Semantic similarity score for question '{question}': {similarity_score}")
                 return {
                     "status": "success",
                     "message": "Answer evaluated successfully",
                     "result": similarity_score,
+                    "correct_answer": q.answer,
                 }
 
         return {
             "status": "error",
-            "message": "The specified question was not found in the cached questions",
+            "message": "The specified question was not found in the list of questions which are loaded.",
         }
 
     except Exception as e:

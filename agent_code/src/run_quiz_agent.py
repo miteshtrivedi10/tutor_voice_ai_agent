@@ -1,10 +1,11 @@
 from collections.abc import AsyncIterable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
+import random
 from typing import Any, Dict, List
 import uuid
 from dotenv import load_dotenv
-from livekit.agents import AgentTask, function_tool
+from livekit.agents import AgentTask, function_tool, inference
 from livekit.agents.llm import FunctionTool, RawFunctionTool
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.agents.llm.llm import ChatChunk
@@ -59,14 +60,28 @@ text_to_speech = deepgram.TTS(mip_opt_out=True, model="aura-2-andromeda-en")
 #     enable_preprocessing=True,
 # )
 
-large_language_model = groq.LLM(
-    model="moonshotai/kimi-k2-instruct-0905",
-    temperature=0.5,
-    tool_choice="auto",
-    parallel_tool_calls=True,
-    max_retries=3,
-    user=uuid.uuid4().hex,
-    top_p=0.75,
+# large_language_model = groq.LLM(
+#     model="openai/gpt-oss-20b",
+#     temperature=0.6,
+#     tool_choice="auto",
+#     parallel_tool_calls=True,
+#     max_retries=3,
+#     user=uuid.uuid4().hex,
+#     top_p=0.75,
+# )
+
+large_language_model = inference.LLM(
+    model="google/gemini-2.5-flash",
+    provider="google",
+    extra_kwargs={
+        "temperature": 0.4,
+        "top_p": 0.75,
+        "tool_choice": "auto",
+        "reasoning_effort": "low",
+        "seed": random.randint(50, 500),
+        "parallel_tool_calls": True,
+        "user": uuid.uuid4().hex,
+    },
 )
 
 # large_language_model = openai.LLM.with_ollama(
