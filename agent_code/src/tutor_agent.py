@@ -15,6 +15,7 @@ import pandas as pd
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.api import DeleteRoomRequest
 from livekit.plugins import silero
+from livekit.api import LiveKitAPI, DeleteRoomRequest
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.agents import (
     Agent,
@@ -34,16 +35,14 @@ from livekit.agents.llm import FunctionTool, RawFunctionTool
 from livekit.agents.llm.chat_context import ChatContext, ChatMessage
 from livekit.agents.llm.llm import ChatChunk
 from livekit.agents.voice.agent import ModelSettings
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit.plugins.turn_detector.english import EnglishModel
 from livekit.plugins import (
     silero,
 )
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from .config.logging_config import logger
 from livekit.agents import function_tool, mcp
 from livekit.plugins import silero, noise_cancellation
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.api import DeleteRoomRequest
 from livekit import agents
 from .run_quiz_agent import (
@@ -58,7 +57,10 @@ from .database.supabase_client import get_db_client
 
 NO_STUDENT_NAME = "Student name not provided. It is mandatory to have a name"
 NO_SUBJECT = "Subject not provided. It is mandatory to have a subject"
-NO_USER_NAME = "User Id not provided. It is mandatory to have a user id"
+NO_USER_NAME = ""
+
+
+TOTAL_SESSION_ACTIVITY_DURATION = 10
 
 
 @dataclass
@@ -69,6 +71,7 @@ class MainAgentData:
     session_id: str = "None"
     session_start_time: datetime = datetime.now()
     total_session_duration: int = 0
+    current_state: str = "GREETINGS"
 
 
 # ---------- AGENT ----------
@@ -92,10 +95,31 @@ class TutorVoiceAgent(Agent):
             stt=stt,
             tts=tts,
             llm=llm,
+            max_endpointing_delay=5,
             vad=silero.VAD.load(),
-            turn_detection=MultilingualModel(),
+            turn_detection=EnglishModel(),
             mcp_servers=[mcp.MCPServerHTTP("http://localhost:8000/mcp")],
         )
+
+    async def user_presence_task(self):
+        # try to ping the user 2 times, if we get no answer, close the session
+        for _ in range(2):
+            await self.session.generate_reply(
+                instructions=(
+                    "The user has been inactive. Politely check if the user is still present and don't repeat same sentences"
+                )
+            )
+            await asyncio.sleep(5)
+        await self.end_the_call()
+
+    def user_state_changed(self, ev: agents.UserStateChangedEvent):
+        if ev.new_state == "away":
+            self.inactivity_task = asyncio.create_task(self.user_presence_task())
+            return
+
+        # ev.new_state: listening, speaking, ..
+        if self.inactivity_task is not None:
+            self.inactivity_task.cancel()
 
     async def on_exit(self) -> None:
         self.session.userdata.total_session_duration = int(
@@ -105,20 +129,20 @@ class TutorVoiceAgent(Agent):
             f"Total seconds generated : {self.session.userdata.total_session_duration}"
         )
 
-    def llm_node(
-        self,
-        chat_ctx: ChatContext,
-        tools: List[FunctionTool | RawFunctionTool],
-        model_settings: ModelSettings,
-    ) -> (
-        AsyncIterable[ChatChunk | str]
-        | Coroutine[Any, Any, AsyncIterable[ChatChunk | str]]
-        | Coroutine[Any, Any, str]
-        | Coroutine[Any, Any, ChatChunk]
-        | Coroutine[Any, Any, None]
-    ):
-        chat_ctx.truncate(max_items=10)
-        return super().llm_node(chat_ctx, tools, model_settings)
+    # def llm_node(
+    #     self,
+    #     chat_ctx: ChatContext,
+    #     tools: List[FunctionTool | RawFunctionTool],
+    #     model_settings: ModelSettings,
+    # ) -> (
+    #     AsyncIterable[ChatChunk | str]
+    #     | Coroutine[Any, Any, AsyncIterable[ChatChunk | str]]
+    #     | Coroutine[Any, Any, str]
+    #     | Coroutine[Any, Any, ChatChunk]
+    #     | Coroutine[Any, Any, None]
+    # ):
+    #     chat_ctx.truncate(max_items=10)
+    #     return super().llm_node(chat_ctx, tools, model_settings)
 
     async def on_enter(self) -> None:
         logger.info(f"Entered session with Session Data : {self.session.userdata}")
@@ -130,10 +154,16 @@ class TutorVoiceAgent(Agent):
         await super().update_instructions(self.get_instructions())
 
     @function_tool
+    async def update_minimum_delay(self, run_context: RunContext) -> None:
+        logger.info("Updating the minimum delay since quiz is started")
+        self.session.current_agent._min_endpointing_delay = 2
+
+    @function_tool
     async def end_the_call(self, run_context: RunContext) -> None:
         await self.session.say(
             "Good bye! This call will now get disconnected", allow_interruptions=False
         )
+        await asyncio.sleep(3)
         job_ctx = get_job_context()
         job_ctx.shutdown()
         await job_ctx.api.room.delete_room(DeleteRoomRequest(room=job_ctx.room.name))
@@ -179,71 +209,104 @@ class TutorVoiceAgent(Agent):
         return "Alright I've updated the subject"
 
     def get_instructions(self) -> str:
-        print(f"Session Data : {self.get_data()}")
         return f"""
-        [Role]
-        You are Quizzy, an AI based quiz master. Your primary goal is to conduct the voice enabled quiz from given syllabus for students in a very realistic and natural manner.
+PERSONA:
+You are a calm, friendly senior school teacher who has led many verbal quiz sessions with students aged 5 to 15 years. 
+You sound real — like someone talking naturally, not reading a script.
 
-        [Context]
-        You are conducting voice or audio based quiz for student, so always stay focused on this context. Once student is connected, proceed to conversational flow section. Do not invent or ask
-        out of syllabus questions (which are not relevant)
+CONTEXT:
+- Student Name: {self.get_data().student_name}
+- user_name: {self.get_data().user_name}
+- Chosen Subject: {self.get_data().subject}
+- Start Time: {self.get_data().session_start_time}
+- Session Duration: {TOTAL_SESSION_ACTIVITY_DURATION} Minutes
 
-        [Response Handling]
-        When asking questions from the 'Conversation Flow' section, evaluate the customer's response to determine if it qualifies as a valid answer. Use context awareness to assess relevance and appropriateness. If the response is valid, proceed to the next relevant question or instructions. Avoid infinite loops by moving forward when a clear answer cannot be obtained.
+VOICE & STYLE:
+- Speak conversationally, relaxed, and human.
+- Keep responses short — one or two sentences max.
+- Vary your phrasing naturally. Avoid repeating the same structure or tone.
+- Use small pauses and soft transitions like “Alright,” “Let’s see,” “Okay,” or “Sounds good.”
+- Encourage gently — use mixed feedback like “Nice,” “Good catch,” “That works,” “Close one,” or “Fair try.”
+- Never sound robotic or scripted.
+- Sound adaptive and thoughtful — like you’re actually present with the student.
 
-        [Warning]
-        Do not modify or attempt to correct user input parameters or user input, Pass them directly into the function or tool as given.
+REPETITION & DELAY HANDLING:
+- Never repeat intros, questions, or evaluation lines unless the student’s answer was unclear.
+- If a tool (e.g., question fetch or evaluation) takes time or fails, simply say a short natural line like:
+  - “Hmm, give me a sec…” 
+  - “Let me try that again.” 
+  - “Alright, one moment.”
+- Don’t restate the question or context after a retry.
+- If a line was just said (like “Could you repeat that?”), don’t say it again right away — wait or move forward.
+- Avoid saying anything twice in a row.
 
-        [Rules]
-        - Keep responses brief
-        - Remember this is voice based communication, so do not speak up any symbols or markdown formatting.
-        - Never repeat yourself unless absolutely necessary.
-        - Be very informal and friendly in your tone, never be robotic. Always address the student by their name [Refer Session Data section]
-        - Do not wait for the student response if you decide to call the tools or functions
-        - Ask one question at a time, but combine related questions where appropriate.
-        - Maintain a calm, empathetic, and professional tone.
-        - Never say the word 'function' nor 'tools' nor the name of the Available functions.
+FLOW:
+1. If student name is missing → ask once → update_student_name.
+2. Fetch valid subjects → get_valid_subjects_to_choose_from.
+3. If subject is missing → ask once → update_subject.
+4. Start the quiz → start_quiz and silently update delay → update_minimum_delay.
+5. For each step:
+   - Fetch question → get_quiz_question.
+   - Ask the question naturally, exactly as provided.
+   - Wait for the student’s answer → evaluate_student_answer.
+   - Give short, fresh feedback (varied tone and phrasing).
+   - If answer unclear once → say “Could you repeat that?”
+   - If unclear again → politely move on (“Alright, let’s go to the next one.”).
+   - If tool call fails → say “Let me try that again.” then retry quietly.
+6. Continue until `is_quiz_completed` returns true.
+7. End with a warm, short closing line like:
+   - “That’s it for now — nice effort today.”
+   - “Good work — we’ll stop here for today.”
+   - “Well done, that’s a wrap for now.”
 
-        [Error Handling]
-        - If the student's response is unclear, ask the student to repeat their answer. If you encounter any issues, inform the student politely and ask to repeat.
-        - If there is any issue with the tools or functions, apologize to the student and inform them that you are facing technical issues and will try again.
+COMPLETION:
+After the final message, trigger → end_the_call.
 
-        [Conversation Flow]
-        1. Greet the student politely based on the time of day (available in session data section) and be welcoming
-        2. Ask for student's name.
-            - if response is not relevant or invalid then repeat step 2.
-            - if unable to save the name due to technical issues, apologize and inform the student that you are facing technical issues and will try again.
-            - if response is valid and relevant then save the name using update_student_name
-        3. Fetch the relevant and valid subjects using get_valid_subjects_to_choose_from
-        4. Ask for student's choice of subject and inform to choose from the valid subjects fetched in step 3.
-            - if response is invalid or not relevant then repeat step 4
-            - if unable to save the subject due to technical issues, apologize and inform the student that you are facing technical issues and will try again.
-            - if response is valid then save the subject using update_subject
-        5. Inform user that you are now preparing the quiz questions and it will take a few seconds, do not wait for any response and move to next step.
-        6. Start the quiz immediately using start_quiz (provided there are valid student name and subject in session data)
-            - Never ask any made up questions
-        7. Get quiz questions only using get_quiz_question (never hallucinate over quiz questions) and ask them to the student one by one
-            - If the student is unable to answer then provide one hint (based on actual answer) and then wait for their answer
-            - Wait for student's relevant answer to the quiz question and then evaluate it using evaluate_student_answer
-            - Based on evaluation result, guide the student to correct answer
-            - If student takes longer time to respond, then politely remind them to answer the question.
-        8. Always check after each question if the quiz is completed use is_quiz_completed
-            - If quiz is not completed then continue to step 7
-            - If quiz is completed then move to Last Message section
+RULES:
+- Greet only once at the very start.
+- Never re-ask known details like student name or subject.
+- Use only questions from `get_quiz_question`.
+- Do not invent, rephrase, or modify questions.
+- Keep speech natural, spontaneous, and distinctly phrased each time.
+- Never fill time with repeated or mechanical sentences.
+""".strip()
 
-        [Last Message]
-        - If the quiz is completed then politely inform student you're ending the call
-        - Proceed to the Call Closing section.
 
-        [Call Closing]
-        - use end_the_call to stop the session
-                
-        [Session Data]
-        - Student Name: {self.get_data().student_name}
-        - Subject: {self.get_data().subject}
-        - User Id: {self.get_data().user_name}
-        - Current Time: {self.get_data().session_start_time}
-        """.strip()
+class UserStateHandler:
+    inactivity_task: asyncio.Task | None = None
+
+    def __init__(self, session: AgentSession, job_ctx: JobContext):
+        self.session = session
+        self.job_ctx = job_ctx
+        asyncio.create_task(self.close_room_after_timeout())  # 10 Minutes
+
+    async def close_room_after_timeout(self):
+        await asyncio.sleep(
+            TOTAL_SESSION_ACTIVITY_DURATION * 60
+        )  # wait for the timeout period
+        await self.session.say(
+            "This session has timed out and we're sorry to disconnect"
+        )
+        await asyncio.sleep(3)
+        self.job_ctx.shutdown()
+        await self.job_ctx.api.room.delete_room(
+            DeleteRoomRequest(room=self.job_ctx.room.name)
+        )
+
+    async def user_presence_task(self):
+        # try to ping the user 2 times, if we get no answer, close the session
+        logger.info("User is away, starting presence check task")
+        i = 0
+        for i in range(3):
+            logger.info(f"Pinging user, attempt {i}")
+            await self.session.generate_reply(
+                instructions="The user has been inactive. Politely check if the user is still present and don't repeat same sentences"
+            )
+            await asyncio.sleep(5)
+            i = i + 1
+
+        if i >= 3:
+            await self.session.aclose()
 
 
 async def log_usage(
@@ -277,15 +340,20 @@ async def agent_entrypoint(ctx: JobContext):
     usage_collector = metrics.UsageCollector()
 
     logger.info(f"AGENT STARTING WITH ROOM : {ctx.room.name}")
+
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
     session = AgentSession(
         userdata=MainAgentData(
             session_id=ctx.job.id,
             total_session_duration=0,
+            user_name="mitst",
             session_start_time=datetime.now(),
         ),
+        user_away_timeout=10,
         max_tool_steps=10,
     )
+
+    state_handler = UserStateHandler(session, ctx)
 
     @session.on("metrics_collected")
     def _on_metrics_collected(event: agents.MetricsCollectedEvent):
@@ -317,8 +385,22 @@ async def agent_entrypoint(ctx: JobContext):
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
+
+    @session.on("user_state_changed")
+    def _on_user_state_changed(ev: agents.UserStateChangedEvent):
+        logger.info(f"User state changed: {ev.old_state} -> {ev.new_state}")
+        if ev.new_state == "away":
+            state_handler.inactivity_task = asyncio.create_task(
+                state_handler.user_presence_task()
+            )
+            return
+
+        # ev.new_state: listening, speaking, ..
+        if state_handler.inactivity_task is not None:
+            state_handler.inactivity_task.cancel()
+
     user_name = list(ctx.room.remote_participants.values())[0].identity
-    session.userdata.user_name = user_name
+    # session.userdata.user_name = user_name
     ctx.add_shutdown_callback(
         lambda: log_usage(
             session_id=ctx.job.id,

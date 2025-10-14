@@ -19,8 +19,11 @@ def get_semantic_similarity(correct_answer: str, student_answer: str) -> str:
 
     logger.info(f"Semantic similarity score: {scored_item}")
 
-    if scored_item > 0.8:
+    if scored_item > 0.9:
         return "CORRECT"
+
+    if scored_item > 0.7:
+        return "MOSTLY CORRECT"
 
     if scored_item > 0.45:
         return "PARTIALLY CORRECT"
