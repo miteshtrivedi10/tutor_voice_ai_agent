@@ -74,10 +74,10 @@ large_language_model = inference.LLM(
     model="google/gemini-2.5-flash",
     provider="google",
     extra_kwargs={
-        "temperature": 0.4,
+        "temperature": 0.5,
         "top_p": 0.75,
         "tool_choice": "auto",
-        "reasoning_effort": "low",
+        "reasoning_effort": "medium",
         "seed": random.randint(50, 500),
         "parallel_tool_calls": True,
         "user": uuid.uuid4().hex,

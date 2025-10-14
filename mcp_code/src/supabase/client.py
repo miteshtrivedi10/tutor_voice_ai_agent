@@ -68,6 +68,46 @@ class SupabaseClient:
             # Return empty set instead of raising exception to prevent server startup failure
             return set()
 
+    def load_unique_subjects_for_user(self, user_name: str) -> Set[str]:
+        """
+        Load all the unique subjects for given user_name
+
+        Args:
+            user_name: user name of the student
+        Returns:
+            List of subjects which are unique
+        """
+        try:
+            # Ensure client is initialized
+            self._initialize_client()
+
+            response = (
+                self.client.table("question_and_answers")
+                .select("subject")
+                .eq("user_name", user_name)
+                .execute()
+            )
+
+            # Handle case where response.data might be None or empty
+            if not response.data:
+                logger.info(f"No subjects for user : {user_name} found in database")
+                return set()
+
+            # Extract subjects and remove duplicates using set
+            subjects = set()
+            for record in response.data:
+                sub = record.get("subject")
+                if sub:
+                    subjects.add(sub)
+
+            logger.info(f"Loaded {len(subjects)} unique subjects")
+            return subjects
+
+        except Exception as e:
+            logger.error(f"Error loading subjects: {str(e)}")
+            # Return empty set instead of raising exception to prevent server startup failure
+            return set()
+
     def load_questions(
         self, user_name: str, subject: str, question_limit: int
     ) -> List[Question]:
