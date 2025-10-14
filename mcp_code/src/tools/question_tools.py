@@ -131,7 +131,7 @@ def start_quiz(user_name: str, subject: str, question_limit: int = 5) -> Dict[st
             if not _verify_valid_subjects:
                 return {
                     "status": "error",
-                    "message": "Invalid subject provided. Please provide a valid subject.",
+                    "message": f"{subject} is invalid subject. Please provide a valid subject.",
                 }
             
         # Validate question_limit
@@ -234,7 +234,7 @@ def evaluate_student_answer(
             if not _verify_valid_subjects:
                 return {
                     "status": "error",
-                    "message": "Invalid subject provided. Please provide a valid subject.",
+                    "message": f"{subject} is invalid subject. Please provide a valid subject.",
                 }
 
         if not question or not isinstance(question, str):
@@ -325,7 +325,7 @@ def get_quiz_question(user_name: str, subject: str) -> Dict[str, Any]:
             if not _verify_valid_subjects:
                 return {
                     "status": "error",
-                    "message": "Invalid subject provided. Please provide a valid subject.",
+                    "message": f"{subject} is invalid subject. Please provide a valid subject.",
                 }
 
         # Create cache key
@@ -423,7 +423,7 @@ def is_quiz_completed(user_name: str, subject: str) -> Dict[str, Any]:
             if not _verify_valid_subjects:
                 return {
                     "status": "error",
-                    "message": "Invalid subject provided. Please provide a valid subject.",
+                    "message": f"{subject} is invalid subject. Please provide a valid subject.",
                 }
 
         # Create cache key
