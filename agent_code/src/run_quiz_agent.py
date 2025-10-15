@@ -74,7 +74,7 @@ large_language_model = inference.LLM(
     model="google/gemini-2.5-flash",
     provider="google",
     extra_kwargs={
-        "temperature": 0.5,
+        "temperature": 0.4,
         "top_p": 0.75,
         "tool_choice": "auto",
         "reasoning_effort": "medium",
