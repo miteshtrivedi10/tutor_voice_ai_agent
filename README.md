@@ -1,3 +1,5 @@
+(Automated Readme File Generated)
+
 # Voice Tutor Agent 🎙️🎓
 
 A next-generation, real-time voice tutoring assistant that interacts with students using natural language. Built with a decoupled microservices architecture, it leverages **LiveKit** for ultra-low latency voice streaming and the **Model Context Protocol (MCP)** for robust, scalable business logic and semantic evaluation.
