@@ -94,7 +94,7 @@ large_language_model = inference.LLM(
 
 # large_language_model = openai.LLM(
 #     model="meta-llama/llama-3.3-8b-instruct:free",
-#     api_key="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",
+#     api_key="your-openrouter-api-key",
 #     base_url="https://openrouter.ai/api/v1",
 #     temperature=0.4,
 #     top_p=0.75,
